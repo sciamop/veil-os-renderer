@@ -43,5 +43,10 @@ dependencies {
     // UVCAndroid from Maven Central - version 1.0.7 as referenced
     // Includes com.serenegiant.usb classes
     implementation("com.herohan:UVCAndroid:1.0.7")
+    
+    // TensorFlow Lite for TPU-accelerated frame interpolation
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 }
 
