@@ -1,11 +1,8 @@
 package com.veil.renderer
 
 import android.app.Activity
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -21,17 +18,15 @@ import android.os.HandlerThread
 import android.view.Surface
 import android.view.View
 import android.view.WindowManager
-import android.widget.SeekBar
 import android.widget.FrameLayout
-import android.widget.TextView
-import android.graphics.Color
-import android.view.Gravity
 import android.media.MediaCodec
-import android.media.MediaFormat
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.content.Intent
 // UVCAndroid includes serenegiant classes - use them directly
 import com.serenegiant.usb.UVCCamera
 import com.serenegiant.usb.UVCParam
-import com.serenegiant.usb.IFrameCallback
 import com.serenegiant.usb.USBMonitor
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -44,6 +39,7 @@ class MainActivity : Activity() {
         private const val CAMERA_HEIGHT = 1080
         private const val CAMERA_FPS = 60
         private const val REQUEST_CAMERA_PERMISSION = 1001
+        private const val REQUEST_RECORD_AUDIO_PERMISSION = 1002
     }
 
     private lateinit var usbManager: UsbManager
@@ -52,8 +48,8 @@ class MainActivity : Activity() {
     private lateinit var glSurfaceView: GLSurfaceView
     private var renderer: StereoRenderer? = null
     private var cameraSurface: Surface? = null
-    private var interpDelaySeekBar: SeekBar? = null
-    private var interpDelayLabel: TextView? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListening = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,6 +72,16 @@ class MainActivity : Activity() {
                 this,
                 arrayOf(android.Manifest.permission.CAMERA),
                 REQUEST_CAMERA_PERMISSION
+            )
+        }
+        
+        // Request audio permission for voice recognition
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) 
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.RECORD_AUDIO),
+                REQUEST_RECORD_AUDIO_PERMISSION
             )
         }
 
@@ -118,7 +124,7 @@ class MainActivity : Activity() {
         glSurfaceView.setEGLContextClientVersion(3)
         renderer = StereoRenderer()
         glSurfaceView.setRenderer(renderer)
-        // Use continuous rendering at 120fps - GLSurfaceView will render as fast as display allows
+        // Render continuously to keep video visible
         glSurfaceView.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
         
         // Request 120Hz refresh rate if supported (Pixel 7 Pro supports this)
@@ -161,61 +167,41 @@ class MainActivity : Activity() {
         
         container.addView(glSurfaceView)
         
-        // Create interpolation delay slider
-        val sliderContainer = FrameLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.BOTTOM
-                setPadding(32, 32, 32, 100)
-            }
-            setBackgroundColor(Color.argb(180, 0, 0, 0))  // Semi-transparent black
-        }
-        
-        interpDelayLabel = TextView(this).apply {
-            text = "Interp Delay: 10.0ms"
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            }
-        }
-        
-        interpDelaySeekBar = SeekBar(this).apply {
-            max = 100  // 0-100 = 0-10ms delay
-            progress = 100  // Start at 10.0ms (optimal for flicker-free interpolation)
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.BOTTOM
-                topMargin = 50
-            }
-            
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val delay = progress / 10.0f
-                    renderer?.setInterpolationDelay(delay)
-                    interpDelayLabel?.text = "Interp Delay: ${String.format("%.1f", delay)}ms"
-                }
-                
-                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-            })
-        }
-        
-        sliderContainer.addView(interpDelayLabel)
-        sliderContainer.addView(interpDelaySeekBar)
-        container.addView(sliderContainer)
-        
         setContentView(container)
+        
+        // Load saved configuration after renderer is created
+        glSurfaceView.post {
+            loadConfiguration()
+        }
+        
+        // Initialize speech recognizer for continuous listening
+        if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(createRecognitionListener())
+            startContinuousListening()
+        }
 
         // USBMonitor will handle device attachment automatically via onAttach callback
     }
+    
+    private fun getPreferences(): SharedPreferences {
+        return getSharedPreferences("VeilRendererConfig", Context.MODE_PRIVATE)
+    }
+    
+    private fun loadConfiguration() {
+        val prefs = getPreferences()
+        val leftEyeOffset = prefs.getInt("leftEyeOffset", 0)
+        val rightEyeOffset = prefs.getInt("rightEyeOffset", 0)
+        val convergenceFactor = prefs.getFloat("convergenceFactor", 0.3f)
+        
+        // Apply loaded configuration to renderer
+        renderer?.setLeftEyeOffset(leftEyeOffset)
+        renderer?.setRightEyeOffset(rightEyeOffset)
+        renderer?.setConvergenceFactor(convergenceFactor)
+        
+        android.util.Log.d("VeilRenderer", "Loaded config: L=$leftEyeOffset, R=$rightEyeOffset, C=$convergenceFactor")
+    }
+    
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -235,6 +221,10 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         glSurfaceView.onResume()
+        if (speechRecognizer != null && ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) 
+            == PackageManager.PERMISSION_GRANTED) {
+            startContinuousListening()
+        }
     }
 
     override fun onPause() {
@@ -243,16 +233,195 @@ class MainActivity : Activity() {
         renderer?.pause()
         uvcCamera?.stopPreview()
         uvcCamera?.destroy()
+        stopListening()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
         renderer?.release()
         uvcCamera?.destroy()
         uvcCamera = null
         usbMonitor?.unregister()
         usbMonitor?.destroy()
         usbMonitor = null
+    }
+    
+    private fun startContinuousListening() {
+        if (isListening) {
+            android.util.Log.d("VeilRenderer", "Already listening, skipping")
+            return
+        }
+        
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) 
+            != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        
+        if (speechRecognizer == null) return
+        
+        // Stop any existing listening first
+        try {
+            speechRecognizer?.stopListening()
+            speechRecognizer?.cancel()
+        } catch (e: Exception) {
+            // Ignore - might already be stopped
+        }
+        
+        // Small delay to ensure recognizer is ready
+        Handler(mainLooper).postDelayed({
+            if (isListening) {
+                android.util.Log.d("VeilRenderer", "Already listening after delay, skipping")
+                return@postDelayed
+            }
+            
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            }
+            
+            try {
+                isListening = true
+                speechRecognizer?.startListening(intent)
+                android.util.Log.d("VeilRenderer", "Started listening")
+            } catch (e: Exception) {
+                isListening = false
+                android.util.Log.e("VeilRenderer", "Speech recognition error", e)
+            }
+        }, 200)  // Wait 200ms after stopping
+    }
+    
+    private fun stopListening() {
+        if (!isListening) return
+        try {
+            speechRecognizer?.stopListening()
+            isListening = false
+        } catch (e: Exception) {
+            isListening = false
+        }
+    }
+    
+    private fun createRecognitionListener(): RecognitionListener {
+        return object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                isListening = true
+            }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                isListening = false
+            }
+            override fun onError(error: Int) {
+                isListening = false
+                
+                // Handle ERROR_RECOGNIZER_BUSY specially
+                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                    android.util.Log.w("VeilRenderer", "Recognizer busy - stopping and retrying")
+                    try {
+                        speechRecognizer?.stopListening()
+                        speechRecognizer?.cancel()
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                    Handler(mainLooper).postDelayed({
+                        if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) 
+                            == PackageManager.PERMISSION_GRANTED && !isListening) {
+                            startContinuousListening()
+                        }
+                    }, 1000)  // Wait longer for busy error
+                } else {
+                    if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        android.util.Log.w("VeilRenderer", "Speech error: $error")
+                    }
+                    Handler(mainLooper).postDelayed({
+                        if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) 
+                            == PackageManager.PERMISSION_GRANTED && !isListening) {
+                            startContinuousListening()
+                        }
+                    }, 500)
+                }
+            }
+            override fun onResults(results: Bundle?) {
+                isListening = false
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (matches != null && matches.isNotEmpty()) {
+                    val spokenText = matches[0].lowercase().trim()
+                    android.util.Log.d("VeilRenderer", "Recognized: $spokenText")
+                    parseVoiceCommand(spokenText)
+                }
+                Handler(mainLooper).postDelayed({
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) 
+                        == PackageManager.PERMISSION_GRANTED && !isListening) {
+                        startContinuousListening()
+                    }
+                }, 300)
+            }
+            override fun onPartialResults(partialResults: Bundle?) {
+                // Process partial results to keep listening active
+                val partialMatches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (partialMatches != null && partialMatches.isNotEmpty()) {
+                    val partialText = partialMatches[0].lowercase().trim()
+                    android.util.Log.d("VeilRenderer", "Partial: $partialText")
+                    // Don't process partial results, just log them - wait for final results
+                }
+            }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        }
+    }
+    
+    private fun parseVoiceCommand(text: String) {
+        val words = text.split("\\s+".toRegex()).map { it.lowercase().trim() }
+        android.util.Log.d("VeilRenderer", "Parsing command: $text, words: $words")
+        
+        try {
+            when {
+                // Pattern: [left/right] [in/out] [number]
+                // "left in 100" or "right out 50"
+                // left/right refer to viewer's left/right (left side of screen = viewer's left)
+                (words.contains("left") || words.contains("right")) && 
+                (words.contains("in") || words.contains("out")) -> {
+                    val isLeft = words.contains("left")
+                    val isRight = words.contains("right")
+                    val isIn = words.contains("in")
+                    val isOut = words.contains("out")
+                    
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val pixels = numbers.lastOrNull() ?: 10
+                    
+                    // Viewer's left = left side of screen = leftEyeOffset
+                    // Viewer's right = right side of screen = rightEyeOffset
+                    // "in" = move towards center (viewer's left moves right, viewer's right moves left)
+                    // "out" = move away from center (viewer's left moves left, viewer's right moves right)
+                    if (isLeft) {
+                        // Viewer's left: "in" = move right (positive), "out" = move left (negative)
+                        val offset = if (isIn) pixels else -pixels
+                        renderer?.adjustLeftEyeOffset(offset)
+                        android.util.Log.d("VeilRenderer", "✓ Viewer's left ${if (isIn) "in" else "out"} $pixels pixels")
+                    } else if (isRight) {
+                        // Viewer's right: "in" = move left (negative), "out" = move right (positive)
+                        val offset = if (isIn) -pixels else pixels
+                        renderer?.adjustRightEyeOffset(offset)
+                        android.util.Log.d("VeilRenderer", "✓ Viewer's right ${if (isIn) "in" else "out"} $pixels pixels")
+                    }
+                }
+                
+                // Pattern: "convergence [number]" or "converge [number]"
+                text.contains("converge", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toFloatOrNull() }
+                    val value = numbers.lastOrNull() ?: 0.3f
+                    renderer?.setConvergenceFactor(value.coerceIn(0f, 1f))
+                    android.util.Log.d("VeilRenderer", "✓ Convergence: $value")
+                }
+                
+                else -> {
+                    android.util.Log.d("VeilRenderer", "Unknown command: $text")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VeilRenderer", "Error parsing command: $text", e)
+        }
     }
 
     private fun requestUsbPermission(device: UsbDevice) {
@@ -374,26 +543,21 @@ class MainActivity : Activity() {
     }
 
     inner class StereoRenderer : GLSurfaceView.Renderer {
-        private var textureId = 0  // Current frame texture
-        private var prevTextureId = 0  // Previous frame texture for interpolation
+        private var textureId = 0
         private var surfaceTexture: SurfaceTexture? = null
         private var decoderSurface: Surface? = null
         private var mediaCodec: MediaCodec? = null
         private var shaderProgram = 0
-        private var interpolateShaderProgram = 0  // Shader for frame interpolation
         private var uMVPMatrixLoc = 0
         private var uTexMatrixLoc = 0
         private var aPositionLoc = 0
         private var aTexCoordLoc = 0
         
-        // Interpolation shader uniforms
-        private var uPrevTexLoc = 0
-        private var uCurrTexLoc = 0
-        private var uInterpFactorLoc = 0
-        private var uInterpMVPMatrixLoc = 0
-        
         private val decoderThread = HandlerThread("DecoderThread").apply { start() }
         private val decoderHandler = Handler(decoderThread.looper)
+        
+        // Reference to GLSurfaceView for requesting renders
+        private val glView: GLSurfaceView = glSurfaceView
         
         // Full screen quad: x, y, z, u, v
         private val fullScreenQuad = floatArrayOf(
@@ -408,16 +572,11 @@ class MainActivity : Activity() {
         
         private var frameAvailable = false
         private var isPaused = false
-        private var frameCount = 0L  // Track frame count for interpolation timing
         
-        // Frame interpolation state
-        private var hasPreviousFrame = false
-        private var lastFrameTime = 0L
-        private var lastRealFrameTime = 0L
-        private var interpolationFactor = 0.5f  // 0.5 = halfway between frames
-        private var frameCopied = false
-        private var justRenderedRealFrame = false
-        private var minInterpDelay = 10.0f  // Minimum ms before interpolating after real frame (10ms eliminates flicker)
+        // Stereoscopic rendering settings
+        private var convergenceFactor = 0.3f  // 0.0 = full separation, 1.0 = fully overlapped
+        private var leftEyeOffset = 0f  // Pixels to shift left eye
+        private var rightEyeOffset = 0f  // Pixels to shift right eye
         
         // Camera dimensions for aspect ratio calculation
         private var cameraWidth = 3840
@@ -447,13 +606,12 @@ class MainActivity : Activity() {
             aPositionLoc = GLES30.glGetAttribLocation(shaderProgram, "aPosition")
             aTexCoordLoc = GLES30.glGetAttribLocation(shaderProgram, "aTexCoord")
             
-            // Create external textures for current and previous frames
-            val textures = IntArray(2)
-            GLES30.glGenTextures(2, textures, 0)
+            // Create external texture for camera frames
+            val textures = IntArray(1)
+            GLES30.glGenTextures(1, textures, 0)
             textureId = textures[0]
-            prevTextureId = textures[1]
             
-            // Setup current frame texture
+            // Setup texture
             GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
             GLES30.glTexParameteri(
                 GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
@@ -466,38 +624,12 @@ class MainActivity : Activity() {
                 GLES30.GL_LINEAR
             )
             
-            // Setup previous frame texture (regular 2D texture for copying)
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, prevTextureId)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
-            
-            // Load interpolation shader
-            val interpolateVertexShader = loadShader(GLES30.GL_VERTEX_SHADER, getVertexShaderSource())
-            val interpolateFragmentShader = loadShader(GLES30.GL_FRAGMENT_SHADER, getInterpolateFragmentShaderSource())
-            
-            interpolateShaderProgram = GLES30.glCreateProgram()
-            GLES30.glAttachShader(interpolateShaderProgram, interpolateVertexShader)
-            GLES30.glAttachShader(interpolateShaderProgram, interpolateFragmentShader)
-            GLES30.glLinkProgram(interpolateShaderProgram)
-            
-            // Get interpolation shader uniform locations
-            uPrevTexLoc = GLES30.glGetUniformLocation(interpolateShaderProgram, "uPrevTex")
-            uCurrTexLoc = GLES30.glGetUniformLocation(interpolateShaderProgram, "uCurrTex")
-            uInterpFactorLoc = GLES30.glGetUniformLocation(interpolateShaderProgram, "uInterpFactor")
-            uInterpMVPMatrixLoc = GLES30.glGetUniformLocation(interpolateShaderProgram, "uMVPMatrix")
-            
             // Create SurfaceTexture and Surface - UVCCamera will write decoded frames here
             surfaceTexture = SurfaceTexture(textureId)
             surfaceTexture?.setOnFrameAvailableListener {
                 frameAvailable = true
-                lastRealFrameTime = System.nanoTime()
-                frameCount++
-                frameCopied = false
                 // Request render when new frame is available
-                glSurfaceView.requestRender()
-                android.util.Log.d("VeilRenderer", "New frame available from SurfaceTexture")
+                glView.post { glView.requestRender() }
             }
             decoderSurface = Surface(surfaceTexture)
             
@@ -525,14 +657,15 @@ class MainActivity : Activity() {
             
             android.opengl.Matrix.setIdentityM(mvpMatrix, 0)
             
+            // Flip horizontally (mirror image for AR passthrough)
+            android.opengl.Matrix.scaleM(mvpMatrix, 0, -1.0f, 1.0f, 1.0f)
+            
             if (cameraAspect > screenAspect) {
                 // Camera is wider than screen - letterbox (black bars top/bottom)
-                // Scale to fit screen width, leaving bars on top/bottom
                 val scale = screenAspect / cameraAspect
                 android.opengl.Matrix.scaleM(mvpMatrix, 0, 1.0f, scale, 1.0f)
             } else {
                 // Camera is taller than screen - pillarbox (black bars left/right)
-                // Scale to fit screen height, leaving bars on left/right
                 val scale = cameraAspect / screenAspect
                 android.opengl.Matrix.scaleM(mvpMatrix, 0, scale, 1.0f, 1.0f)
             }
@@ -544,147 +677,136 @@ class MainActivity : Activity() {
             updateMVPMatrix()
         }
         
-        fun setInterpolationDelay(delayMs: Float) {
-            minInterpDelay = delayMs
+        fun adjustLeftEyeOffset(pixels: Int) {
+            leftEyeOffset += pixels
+            saveConfiguration()
+            // Request render to update display
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Left eye offset adjusted to: $leftEyeOffset")
         }
-
-        override fun onDrawFrame(gl: GL10?) {
-            if (isPaused) return
+        
+        fun adjustRightEyeOffset(pixels: Int) {
+            rightEyeOffset += pixels
+            saveConfiguration()
+            // Request render to update display
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Right eye offset adjusted to: $rightEyeOffset")
+        }
+        
+        fun setLeftEyeOffset(pixels: Int) {
+            leftEyeOffset = pixels.toFloat()
+            saveConfiguration()
+            // Request render to update display
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Left eye offset set to: $leftEyeOffset")
+        }
+        
+        fun setRightEyeOffset(pixels: Int) {
+            rightEyeOffset = pixels.toFloat()
+            saveConfiguration()
+            // Request render to update display
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Right eye offset set to: $rightEyeOffset")
+        }
+        
+        fun setConvergenceFactor(factor: Float) {
+            convergenceFactor = factor.coerceIn(0f, 1f)
+            saveConfiguration()
+            // Request render to update display
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Convergence factor set to: $convergenceFactor")
+        }
+        
+        fun adjustConvergence(pixels: Int) {
+            // Adjust convergence by moving both eyes symmetrically
+            // Positive pixels = move towards center (in)
+            // Negative pixels = move away from center (out)
+            leftEyeOffset += pixels
+            rightEyeOffset -= pixels  // Opposite direction for right eye
             
-            val currentTime = System.nanoTime()
-            val timeSinceLastRealFrame = if (lastRealFrameTime > 0) (currentTime - lastRealFrameTime) / 1_000_000.0f else 0f
-            val frameInterval = 1000.0f / 60.0f  // 60fps = ~16.67ms per frame
-            
-            // Check if we have a new frame available
-            val hasNewFrame = frameAvailable
-            
-            // Always render real frame if available, otherwise interpolate
-            if (hasNewFrame) {
-                // Copy CURRENT frame to previous BEFORE updating (if we have a previous frame)
-                if (hasPreviousFrame && screenWidth > 0 && screenHeight > 0 && !frameCopied) {
-                    copyFrameToPrevious()
-                    frameCopied = true
-                }
-                
-                // Update to the new frame
-                try {
-                    surfaceTexture?.updateTexImage()
-                    surfaceTexture?.getTransformMatrix(texMatrix)
-                    hasPreviousFrame = true
-                    frameAvailable = false
-                    frameCopied = false  // Reset for next frame
-                    justRenderedRealFrame = true
-                } catch (e: Exception) {
-                    // Texture not ready yet
-                }
-            }
-            
-            // Determine if we should render interpolated frame
-            // Interpolate if we have both frames and we're between real frames
-            // The key is to always render SOMETHING to maintain 120fps
-            val shouldRenderInterpolated = hasPreviousFrame && 
-                                          !hasNewFrame && 
-                                          !justRenderedRealFrame &&
-                                          timeSinceLastRealFrame > minInterpDelay && 
-                                          timeSinceLastRealFrame < frameInterval
-            
-            if (shouldRenderInterpolated) {
-                // Render interpolated frame between previous and current
-                // Interpolation factor: 0.0 = previous frame, 1.0 = current frame
-                // Map the time window to 0-1 for smooth interpolation
-                val interpWindow = frameInterval - minInterpDelay
-                val interpFactor = if (interpWindow > 0) {
-                    ((timeSinceLastRealFrame - minInterpDelay) / interpWindow).coerceIn(0f, 1f)
-                } else {
-                    0.5f  // Default to halfway if window is invalid
-                }
-                
-                GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
-                GLES30.glUseProgram(interpolateShaderProgram)
-                
-                // Bind previous frame (2D texture - the one we copied)
-                GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
-                GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, prevTextureId)
-                GLES30.glUniform1i(uPrevTexLoc, 0)
-                
-                // Bind current frame (external texture - the latest real frame)
-                GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
-                GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
-                GLES30.glUniform1i(uCurrTexLoc, 1)
-                
-                // Set interpolation factor and MVP matrix
-                GLES30.glUniform1f(uInterpFactorLoc, interpFactor)
-                GLES30.glUniformMatrix4fv(uInterpMVPMatrixLoc, 1, false, mvpMatrix, 0)
-                
-                drawQuad(fullScreenQuad)
-            } else {
-                // Render real frame
-                GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
-                
-                if (hasPreviousFrame) {
-                    GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
-                    GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
-                    GLES30.glUseProgram(shaderProgram)
-                    GLES30.glUniformMatrix4fv(uTexMatrixLoc, 1, false, texMatrix, 0)
-                    GLES30.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, mvpMatrix, 0)
-                    drawQuad(fullScreenQuad)
-                }
-            }
-            
-            // Clear the justRenderedRealFrame flag after a short delay
-            if (justRenderedRealFrame && timeSinceLastRealFrame > minInterpDelay) {
-                justRenderedRealFrame = false
+            saveConfiguration()
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Convergence adjusted: L=$leftEyeOffset, R=$rightEyeOffset")
+        }
+        
+        fun getLeftEyeOffset(): Int = leftEyeOffset.toInt()
+        fun getRightEyeOffset(): Int = rightEyeOffset.toInt()
+        fun getConvergenceFactor(): Float = convergenceFactor
+        
+        private fun saveConfiguration() {
+            // Save to SharedPreferences via MainActivity
+            (glSurfaceView.context as? Activity)?.let { activity ->
+                val prefs = activity.getSharedPreferences("VeilRendererConfig", Context.MODE_PRIVATE)
+                val editor = prefs.edit()
+                editor.putInt("leftEyeOffset", leftEyeOffset.toInt())
+                editor.putInt("rightEyeOffset", rightEyeOffset.toInt())
+                editor.putFloat("convergenceFactor", convergenceFactor)
+                editor.apply()
+                android.util.Log.d("VeilRenderer", "Saved config: L=${leftEyeOffset.toInt()}, R=${rightEyeOffset.toInt()}, C=$convergenceFactor")
             }
         }
         
-        private fun copyFrameToPrevious() {
-            // Save current state
-            val prevViewport = IntArray(4)
-            GLES30.glGetIntegerv(GLES30.GL_VIEWPORT, prevViewport, 0)
-            val prevFBO = IntArray(1)
-            GLES30.glGetIntegerv(GLES30.GL_FRAMEBUFFER_BINDING, prevFBO, 0)
+        override fun onDrawFrame(gl: GL10?) {
+            if (isPaused) return
             
-            // Create FBO to copy current external texture to previous 2D texture
-            val fbo = IntArray(1)
-            GLES30.glGenFramebuffers(1, fbo, 0)
-            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0])
-            
-            // Allocate texture storage if needed (only first time)
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, prevTextureId)
-            // Check if texture is already allocated by trying to get its size
-            // For now, just allocate it - it's cheap if already allocated
-            GLES30.glTexImage2D(
-                GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA,
-                cameraWidth, cameraHeight, 0,
-                GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null
-            )
-            
-            GLES30.glFramebufferTexture2D(
-                GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
-                GLES30.GL_TEXTURE_2D, prevTextureId, 0
-            )
-            
-            // Check FBO completeness
-            val status = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER)
-            if (status == GLES30.GL_FRAMEBUFFER_COMPLETE) {
-                // Render current frame to FBO
-                GLES30.glViewport(0, 0, cameraWidth, cameraHeight)
-                GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
-                
-                GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
-                GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
-                GLES30.glUseProgram(shaderProgram)
-                GLES30.glUniformMatrix4fv(uTexMatrixLoc, 1, false, texMatrix, 0)
-                val identityMatrix = FloatArray(16)
-                android.opengl.Matrix.setIdentityM(identityMatrix, 0)
-                GLES30.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, identityMatrix, 0)
-                drawQuad(fullScreenQuad)
+            // Ensure viewport is set correctly
+            if (screenWidth > 0 && screenHeight > 0) {
+                GLES30.glViewport(0, 0, screenWidth, screenHeight)
             }
             
-            // Restore previous state
-            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, prevFBO[0])
-            GLES30.glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3])
-            GLES30.glDeleteFramebuffers(1, fbo, 0)
+            GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+            
+            // Always update texture if available, but don't skip rendering if no new frame
+            if (frameAvailable) {
+                try {
+                    surfaceTexture?.updateTexImage()
+                    surfaceTexture?.getTransformMatrix(texMatrix)
+                    frameAvailable = false
+                } catch (e: Exception) {
+                    // Texture not ready yet - still render with last frame
+                    android.util.Log.w("VeilRenderer", "Texture update failed", e)
+                }
+            }
+            
+            // Don't render if texture isn't ready
+            if (textureId == 0) return
+            
+            // Render stereoscopic: left eye (left half) and right eye (right half)
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+            GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
+            GLES30.glUseProgram(shaderProgram)
+            GLES30.glUniformMatrix4fv(uTexMatrixLoc, 1, false, texMatrix, 0)
+            
+            // Calculate convergence (how close together the images are)
+            val halfWidth = 0.5f * (1.0f - convergenceFactor)
+            val centerOffset = convergenceFactor * 0.25f
+            
+            // Convert pixel offsets to normalized screen coordinates
+            val leftOffsetNorm = if (screenWidth > 0) leftEyeOffset / (screenWidth / 2.0f) else 0f
+            val rightOffsetNorm = if (screenWidth > 0) rightEyeOffset / (screenWidth / 2.0f) else 0f
+            
+            // Left eye: left half of texture (full height, left half width)
+            val leftQuad = floatArrayOf(
+                -1.0f + centerOffset + leftOffsetNorm, -1.0f, 0.0f, 0.0f, 1.0f,
+                -1.0f + centerOffset + leftOffsetNorm + halfWidth * 2.0f, -1.0f, 0.0f, 0.5f, 1.0f,
+                -1.0f + centerOffset + leftOffsetNorm,  1.0f, 0.0f, 0.0f, 0.0f,
+                -1.0f + centerOffset + leftOffsetNorm + halfWidth * 2.0f,  1.0f, 0.0f, 0.5f, 0.0f
+            )
+            
+            // Right eye: right half of texture (full height, right half width)
+            val rightQuad = floatArrayOf(
+                 1.0f - centerOffset - halfWidth * 2.0f + rightOffsetNorm, -1.0f, 0.0f, 0.5f, 1.0f,
+                 1.0f - centerOffset + rightOffsetNorm, -1.0f, 0.0f, 1.0f, 1.0f,
+                 1.0f - centerOffset - halfWidth * 2.0f + rightOffsetNorm,  1.0f, 0.0f, 0.5f, 0.0f,
+                 1.0f - centerOffset + rightOffsetNorm,  1.0f, 0.0f, 1.0f, 0.0f
+            )
+            
+            // Render left eye
+            GLES30.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, mvpMatrix, 0)
+            drawQuad(leftQuad)
+            
+            // Render right eye
+            drawQuad(rightQuad)
         }
         
         private fun drawQuad(quad: FloatArray) {
@@ -801,25 +923,6 @@ class MainActivity : Activity() {
             """.trimIndent()
         }
         
-        private fun getInterpolateFragmentShaderSource(): String {
-            return """
-                #extension GL_OES_EGL_image_external : require
-                precision mediump float;
-                uniform sampler2D uPrevTex;
-                uniform samplerExternalOES uCurrTex;
-                uniform float uInterpFactor;
-                varying vec2 vTextureCoord;
-                
-                void main() {
-                    // Simple blend-based interpolation (can be upgraded to ML-based later)
-                    vec4 prevColor = texture2D(uPrevTex, vTextureCoord);
-                    vec4 currColor = texture2D(uCurrTex, vTextureCoord);
-                    
-                    // Blend between previous and current frame
-                    gl_FragColor = mix(prevColor, currColor, uInterpFactor);
-                }
-            """.trimIndent()
-        }
     }
 }
 
