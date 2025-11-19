@@ -1,0 +1,31 @@
+# Build outputs
+build/
+app/build/
+*.apk
+*.ap_
+*.aab
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Local configuration
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# Android Studio
+*.log
+*.class
+captures/
+.externalNativeBuild/
+.cxx/
+
+
