@@ -19,6 +19,9 @@ import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.TextView
+import android.graphics.Typeface
+import android.view.Gravity
 import android.media.MediaCodec
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -35,11 +38,20 @@ import javax.microedition.khronos.opengles.GL10
 
 class MainActivity : Activity() {
     companion object {
-        private const val CAMERA_WIDTH = 3840
-        private const val CAMERA_HEIGHT = 1080
+        private const val CAMERA_WIDTH = 2560
+        private const val CAMERA_HEIGHT = 720
         private const val CAMERA_FPS = 60
         private const val REQUEST_CAMERA_PERMISSION = 1001
         private const val REQUEST_RECORD_AUDIO_PERMISSION = 1002
+        
+        // Available resolutions in order (highest to lowest)
+        private val RESOLUTIONS = listOf(
+            Pair(3840, 1080),
+            Pair(2560, 720),
+            Pair(1600, 600),
+            Pair(1280, 480),
+            Pair(640, 240)
+        )
     }
 
     private lateinit var usbManager: UsbManager
@@ -50,6 +62,11 @@ class MainActivity : Activity() {
     private var cameraSurface: Surface? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
+    private var currentCtrlBlock: USBMonitor.UsbControlBlock? = null
+    private var currentResolutionIndex = 1  // Start at 2560x720 (index 1)
+    private var overlayLeftEye: TextView? = null
+    private var overlayRightEye: TextView? = null
+    private var overlayHideHandler: Handler? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,6 +117,8 @@ class MainActivity : Activity() {
                 ctrlBlock: USBMonitor.UsbControlBlock,
                 createNew: Boolean
             ) {
+                currentCtrlBlock = ctrlBlock
+                loadConfiguration()  // Load saved resolution index
                 openCamera(ctrlBlock)
             }
 
@@ -167,6 +186,43 @@ class MainActivity : Activity() {
         
         container.addView(glSurfaceView)
         
+        // Create stereoscopic overlays - one for each eye, centered in each eye's viewport
+        overlayLeftEye = TextView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+            setTextColor(android.graphics.Color.WHITE)
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            textSize = 12f
+            setBackgroundColor(android.graphics.Color.argb(180, 0, 0, 0))  // Semi-transparent black
+            setPadding(16, 8, 16, 8)
+            visibility = View.GONE
+        }
+        
+        overlayRightEye = TextView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+            setTextColor(android.graphics.Color.WHITE)
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            textSize = 12f
+            setBackgroundColor(android.graphics.Color.argb(180, 0, 0, 0))  // Semi-transparent black
+            setPadding(16, 8, 16, 8)
+            visibility = View.GONE
+        }
+        
+        container.addView(overlayLeftEye)
+        container.addView(overlayRightEye)
+        
+        // Update overlay positions when layout changes
+        container.viewTreeObserver.addOnGlobalLayoutListener {
+            updateOverlayPositions()
+        }
+        
+        overlayHideHandler = Handler(mainLooper)
+        
         setContentView(container)
         
         // Load saved configuration after renderer is created
@@ -193,13 +249,19 @@ class MainActivity : Activity() {
         val leftEyeOffset = prefs.getInt("leftEyeOffset", 0)
         val rightEyeOffset = prefs.getInt("rightEyeOffset", 0)
         val convergenceFactor = prefs.getFloat("convergenceFactor", 0.3f)
+        currentResolutionIndex = prefs.getInt("resolutionIndex", 1)
         
         // Apply loaded configuration to renderer
         renderer?.setLeftEyeOffset(leftEyeOffset)
         renderer?.setRightEyeOffset(rightEyeOffset)
         renderer?.setConvergenceFactor(convergenceFactor)
+        renderer?.setSharpness(prefs.getFloat("sharpness", 0.5f))
+        renderer?.setContrast(prefs.getFloat("contrast", 1.0f))
+        renderer?.setBrightness(prefs.getFloat("brightness", 0.0f))
+        renderer?.setSaturation(prefs.getFloat("saturation", 1.0f))
+        renderer?.setVerticalScale(prefs.getFloat("verticalScale", 1.0f))
         
-        android.util.Log.d("VeilRenderer", "Loaded config: L=$leftEyeOffset, R=$rightEyeOffset, C=$convergenceFactor")
+        android.util.Log.d("VeilRenderer", "Loaded config: L=$leftEyeOffset, R=$rightEyeOffset, C=$convergenceFactor, Res=${currentResolutionIndex}")
     }
     
 
@@ -371,6 +433,58 @@ class MainActivity : Activity() {
         }
     }
     
+    private fun updateOverlayPositions() {
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+        
+        overlayLeftEye?.let { left ->
+            val params = left.layoutParams as FrameLayout.LayoutParams
+            left.measure(
+                View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+            )
+            val leftWidth = left.measuredWidth
+            val leftHeight = left.measuredHeight
+            // Center of left half: x = screenWidth/4, y = screenHeight/2
+            params.leftMargin = (screenWidth / 4) - (leftWidth / 2)
+            params.topMargin = (screenHeight / 2) - (leftHeight / 2)
+            left.layoutParams = params
+        }
+        
+        overlayRightEye?.let { right ->
+            val params = right.layoutParams as FrameLayout.LayoutParams
+            right.measure(
+                View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+            )
+            val rightWidth = right.measuredWidth
+            val rightHeight = right.measuredHeight
+            // Center of right half: x = 3*screenWidth/4, y = screenHeight/2
+            params.leftMargin = (3 * screenWidth / 4) - (rightWidth / 2)
+            params.topMargin = (screenHeight / 2) - (rightHeight / 2)
+            right.layoutParams = params
+        }
+    }
+    
+    private fun showOverlay(message: String, durationMs: Long = 2000) {
+        overlayHideHandler?.removeCallbacksAndMessages(null)  // Cancel any pending hide
+        overlayLeftEye?.let { overlay ->
+            overlay.text = message
+            overlay.visibility = View.VISIBLE
+            updateOverlayPositions()  // Update positions when showing
+        }
+        overlayRightEye?.let { overlay ->
+            overlay.text = message
+            overlay.visibility = View.VISIBLE
+            updateOverlayPositions()  // Update positions when showing
+        }
+        overlayHideHandler?.postDelayed({
+            overlayLeftEye?.visibility = View.GONE
+            overlayRightEye?.visibility = View.GONE
+        }, durationMs)
+    }
+    
     private fun parseVoiceCommand(text: String) {
         val words = text.split("\\s+".toRegex()).map { it.lowercase().trim() }
         android.util.Log.d("VeilRenderer", "Parsing command: $text, words: $words")
@@ -398,11 +512,15 @@ class MainActivity : Activity() {
                         // Viewer's left: "in" = move right (positive), "out" = move left (negative)
                         val offset = if (isIn) pixels else -pixels
                         renderer?.adjustLeftEyeOffset(offset)
+                        val current = renderer?.getLeftEyeOffset() ?: 0
+                        showOverlay("LEFT EYE: ${current}px\nRange: unlimited")
                         android.util.Log.d("VeilRenderer", "✓ Viewer's left ${if (isIn) "in" else "out"} $pixels pixels")
                     } else if (isRight) {
                         // Viewer's right: "in" = move left (negative), "out" = move right (positive)
                         val offset = if (isIn) -pixels else pixels
                         renderer?.adjustRightEyeOffset(offset)
+                        val current = renderer?.getRightEyeOffset() ?: 0
+                        showOverlay("RIGHT EYE: ${current}px\nRange: unlimited")
                         android.util.Log.d("VeilRenderer", "✓ Viewer's right ${if (isIn) "in" else "out"} $pixels pixels")
                     }
                 }
@@ -411,8 +529,88 @@ class MainActivity : Activity() {
                 text.contains("converge", ignoreCase = true) -> {
                     val numbers = words.mapNotNull { it.toFloatOrNull() }
                     val value = numbers.lastOrNull() ?: 0.3f
-                    renderer?.setConvergenceFactor(value.coerceIn(0f, 1f))
-                    android.util.Log.d("VeilRenderer", "✓ Convergence: $value")
+                    val clamped = value.coerceIn(0f, 1f)
+                    renderer?.setConvergenceFactor(clamped)
+                    showOverlay("CONVERGENCE: ${String.format("%.2f", clamped)}\nRange: 0.0 - 1.0")
+                    android.util.Log.d("VeilRenderer", "✓ Convergence: $clamped")
+                }
+                
+                // Resolution control: "UP" or "DOWN"
+                words.contains("up") -> {
+                    changeResolution(1)  // Increase resolution (lower index)
+                }
+                
+                words.contains("down") -> {
+                    changeResolution(-1)  // Decrease resolution (higher index)
+                }
+                
+                // Post-processing: "sharpness [number]", "contrast [number]", "brightness [number]", "saturation [number]"
+                text.contains("sharpness", ignoreCase = true) || text.contains("sharp", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toFloatOrNull() }
+                    val value = numbers.lastOrNull() ?: 0.5f
+                    val clamped = value.coerceIn(0f, 1f)
+                    renderer?.setSharpness(clamped)
+                    showOverlay("SHARPNESS: ${String.format("%.2f", clamped)}\nRange: 0.0 - 1.0")
+                    android.util.Log.d("VeilRenderer", "✓ Sharpness: $clamped")
+                }
+                
+                text.contains("contrast", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toFloatOrNull() }
+                    val value = numbers.lastOrNull() ?: 1.0f
+                    val clamped = value.coerceIn(0.5f, 1.5f)
+                    renderer?.setContrast(clamped)
+                    showOverlay("CONTRAST: ${String.format("%.2f", clamped)}\nRange: 0.5 - 1.5")
+                    android.util.Log.d("VeilRenderer", "✓ Contrast: $clamped")
+                }
+                
+                text.contains("brightness", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toFloatOrNull() }
+                    val value = numbers.lastOrNull() ?: 0.0f
+                    val clamped = value.coerceIn(-0.5f, 0.5f)
+                    renderer?.setBrightness(clamped)
+                    showOverlay("BRIGHTNESS: ${String.format("%.2f", clamped)}\nRange: -0.5 - 0.5")
+                    android.util.Log.d("VeilRenderer", "✓ Brightness: $clamped")
+                }
+                
+                text.contains("saturation", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toFloatOrNull() }
+                    val value = numbers.lastOrNull() ?: 1.0f
+                    val clamped = value.coerceIn(0f, 2f)
+                    renderer?.setSaturation(clamped)
+                    showOverlay("SATURATION: ${String.format("%.2f", clamped)}\nRange: 0.0 - 2.0")
+                    android.util.Log.d("VeilRenderer", "✓ Saturation: $clamped")
+                }
+                
+                // Vertical scaling: "compress [number]" or "stretch [number]"
+                text.contains("compress", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toFloatOrNull() }
+                    val delta = -(numbers.lastOrNull() ?: 0.1f) / 10.0f  // Negative delta = compress
+                    val current = renderer?.getVerticalScale() ?: 1.0f
+                    val newValue = (current + delta).coerceIn(0.1f, 3.0f)
+                    renderer?.setVerticalScale(newValue)
+                    showOverlay("VERTICAL SCALE: ${String.format("%.2f", newValue)}\nRange: 0.1 - 3.0\n(compress = shorter, stretch = taller)")
+                    android.util.Log.d("VeilRenderer", "✓ Compress: $newValue")
+                }
+                
+                text.contains("stretch", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toFloatOrNull() }
+                    val delta = (numbers.lastOrNull() ?: 0.1f) / 10.0f  // Positive delta = stretch
+                    val current = renderer?.getVerticalScale() ?: 1.0f
+                    val newValue = (current + delta).coerceIn(0.1f, 3.0f)
+                    renderer?.setVerticalScale(newValue)
+                    showOverlay("VERTICAL SCALE: ${String.format("%.2f", newValue)}\nRange: 0.1 - 3.0\n(compress = shorter, stretch = taller)")
+                    android.util.Log.d("VeilRenderer", "✓ Stretch: $newValue")
+                }
+                
+                // Reset filters and scaling (but NOT eye position or resolution)
+                text.contains("reset", ignoreCase = true) -> {
+                    renderer?.setSharpness(0.5f)
+                    renderer?.setContrast(1.0f)
+                    renderer?.setBrightness(0.0f)
+                    renderer?.setSaturation(1.0f)
+                    renderer?.setVerticalScale(1.0f)
+                    showOverlay("RESET:\nSharpness: 0.50\nContrast: 1.00\nBrightness: 0.00\nSaturation: 1.00\nVertical Scale: 1.00")
+                    android.util.Log.d("VeilRenderer", "✓ Reset filters and scaling")
                 }
                 
                 else -> {
@@ -424,6 +622,52 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun changeResolution(direction: Int) {
+        val newIndex = currentResolutionIndex - direction  // -1 for UP (higher res), +1 for DOWN (lower res)
+        val wasAtMin = currentResolutionIndex == RESOLUTIONS.size - 1
+        val wasAtMax = currentResolutionIndex == 0
+        
+        if (newIndex < 0 || newIndex >= RESOLUTIONS.size) {
+            // At min or max - flash red
+            renderer?.flashRed()
+            val res = RESOLUTIONS[currentResolutionIndex]
+            showOverlay("RESOLUTION: ${res.first}x${res.second}\n${if (wasAtMax) "MAX" else "MIN"} reached")
+            android.util.Log.d("VeilRenderer", "Resolution at ${if (wasAtMax) "max" else "min"} - ${RESOLUTIONS[currentResolutionIndex]}")
+            return
+        }
+        
+        currentResolutionIndex = newIndex
+        val newRes = RESOLUTIONS[currentResolutionIndex]
+        val nextUp = if (currentResolutionIndex > 0) RESOLUTIONS[currentResolutionIndex - 1] else null
+        val nextDown = if (currentResolutionIndex < RESOLUTIONS.size - 1) RESOLUTIONS[currentResolutionIndex + 1] else null
+        val overlayText = buildString {
+            append("RESOLUTION: ${newRes.first}x${newRes.second}\n")
+            if (nextUp != null) append("UP: ${nextUp.first}x${nextUp.second}  ")
+            else append("UP: MAX  ")
+            if (nextDown != null) append("DOWN: ${nextDown.first}x${nextDown.second}")
+            else append("DOWN: MIN")
+        }
+        showOverlay(overlayText)
+        android.util.Log.d("VeilRenderer", "Changing resolution to: ${newRes.first}x${newRes.second}")
+        
+        // Save resolution preference
+        val prefs = getPreferences()
+        prefs.edit().putInt("resolutionIndex", currentResolutionIndex).apply()
+        
+        // Reopen camera with new resolution
+        currentCtrlBlock?.let { ctrlBlock ->
+            // Stop current camera
+            uvcCamera?.stopPreview()
+            uvcCamera?.destroy()
+            uvcCamera = null
+            
+            // Small delay then reopen
+            Handler(mainLooper).postDelayed({
+                openCamera(ctrlBlock)
+            }, 100)
+        }
+    }
+    
     private fun requestUsbPermission(device: UsbDevice) {
         usbMonitor?.requestPermission(device)
     }
@@ -451,17 +695,18 @@ class MainActivity : Activity() {
                         val supportedSizes = uvcCamera?.supportedSizeList
                         android.util.Log.d("VeilRenderer", "ELP 3D-1080p V85 - Supported sizes: $supportedSizes")
                         
-                        // Find MJPEG format size (type 7) for 3840x1080
+                        // Find MJPEG format size based on current resolution index
+                        val targetRes = RESOLUTIONS[currentResolutionIndex.coerceIn(0, RESOLUTIONS.size - 1)]
                         var selectedSize: com.serenegiant.usb.Size? = null
                         if (supportedSizes != null) {
-                            // Try to find 3840x1080 MJPEG first
+                            // Try to find target resolution MJPEG first
                             selectedSize = supportedSizes.firstOrNull { 
-                                it.width == 3840 && it.height == 1080 && it.type == 7 
+                                it.width == targetRes.first && it.height == targetRes.second && it.type == 7 
                             }
                             if (selectedSize == null) {
-                                // Try any 3840x1080
+                                // Try any matching resolution
                                 selectedSize = supportedSizes.firstOrNull { 
-                                    it.width == 3840 && it.height == 1080 
+                                    it.width == targetRes.first && it.height == targetRes.second 
                                 }
                             }
                             if (selectedSize == null) {
@@ -552,6 +797,11 @@ class MainActivity : Activity() {
         private var uTexMatrixLoc = 0
         private var aPositionLoc = 0
         private var aTexCoordLoc = 0
+        private var uSharpnessLoc = 0
+        private var uContrastLoc = 0
+        private var uBrightnessLoc = 0
+        private var uSaturationLoc = 0
+        private var uTexSizeLoc = 0
         
         private val decoderThread = HandlerThread("DecoderThread").apply { start() }
         private val decoderHandler = Handler(decoderThread.looper)
@@ -579,10 +829,22 @@ class MainActivity : Activity() {
         private var rightEyeOffset = 0f  // Pixels to shift right eye
         
         // Camera dimensions for aspect ratio calculation
-        private var cameraWidth = 3840
-        private var cameraHeight = 1080
+        private var cameraWidth = 2560
+        private var cameraHeight = 720
         private var screenWidth = 0
         private var screenHeight = 0
+        
+        // Red flash for min/max resolution warning
+        private var redFlashUntil = 0L
+        
+        // Post-processing parameters
+        private var sharpness = 0.5f  // 0.0 = no sharpening, 1.0 = max sharpening
+        private var contrast = 1.0f   // 0.5 = low contrast, 1.0 = normal, 1.5 = high contrast
+        private var brightness = 0.0f // -0.5 = darker, 0.0 = normal, 0.5 = brighter
+        private var saturation = 1.0f // 0.0 = grayscale, 1.0 = normal, 2.0 = oversaturated
+        
+        // Vertical scaling (compress/stretch)
+        private var verticalScale = 1.0f  // 0.5 = compressed (shorter), 1.0 = normal, 2.0 = stretched (taller)
         
         init {
             // Initialize identity matrices
@@ -605,6 +867,11 @@ class MainActivity : Activity() {
             uTexMatrixLoc = GLES30.glGetUniformLocation(shaderProgram, "uTexMatrix")
             aPositionLoc = GLES30.glGetAttribLocation(shaderProgram, "aPosition")
             aTexCoordLoc = GLES30.glGetAttribLocation(shaderProgram, "aTexCoord")
+            uSharpnessLoc = GLES30.glGetUniformLocation(shaderProgram, "uSharpness")
+            uContrastLoc = GLES30.glGetUniformLocation(shaderProgram, "uContrast")
+            uBrightnessLoc = GLES30.glGetUniformLocation(shaderProgram, "uBrightness")
+            uSaturationLoc = GLES30.glGetUniformLocation(shaderProgram, "uSaturation")
+            uTexSizeLoc = GLES30.glGetUniformLocation(shaderProgram, "uTexSize")
             
             // Create external texture for camera frames
             val textures = IntArray(1)
@@ -669,6 +936,9 @@ class MainActivity : Activity() {
                 val scale = cameraAspect / screenAspect
                 android.opengl.Matrix.scaleM(mvpMatrix, 0, scale, 1.0f, 1.0f)
             }
+            
+            // Apply vertical scaling (compress/stretch)
+            android.opengl.Matrix.scaleM(mvpMatrix, 0, 1.0f, verticalScale, 1.0f)
         }
         
         fun setCameraSize(width: Int, height: Int) {
@@ -717,6 +987,52 @@ class MainActivity : Activity() {
             android.util.Log.d("VeilRenderer", "Convergence factor set to: $convergenceFactor")
         }
         
+        fun setSharpness(value: Float) {
+            sharpness = value.coerceIn(0f, 1f)
+            saveConfiguration()
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Sharpness set to: $sharpness")
+        }
+        
+        fun setContrast(value: Float) {
+            contrast = value.coerceIn(0.5f, 1.5f)
+            saveConfiguration()
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Contrast set to: $contrast")
+        }
+        
+        fun setBrightness(value: Float) {
+            brightness = value.coerceIn(-0.5f, 0.5f)
+            saveConfiguration()
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Brightness set to: $brightness")
+        }
+        
+        fun setSaturation(value: Float) {
+            saturation = value.coerceIn(0f, 2f)
+            saveConfiguration()
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Saturation set to: $saturation")
+        }
+        
+        fun setVerticalScale(value: Float) {
+            verticalScale = value.coerceIn(0.1f, 3.0f)
+            updateMVPMatrix()
+            saveConfiguration()
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Vertical scale set to: $verticalScale")
+        }
+        
+        fun adjustVerticalScale(delta: Float) {
+            verticalScale = (verticalScale + delta).coerceIn(0.1f, 3.0f)
+            updateMVPMatrix()
+            saveConfiguration()
+            glView.post { glView.requestRender() }
+            android.util.Log.d("VeilRenderer", "Vertical scale adjusted to: $verticalScale")
+        }
+        
+        fun getVerticalScale(): Float = verticalScale
+        
         fun adjustConvergence(pixels: Int) {
             // Adjust convergence by moving both eyes symmetrically
             // Positive pixels = move towards center (in)
@@ -741,9 +1057,18 @@ class MainActivity : Activity() {
                 editor.putInt("leftEyeOffset", leftEyeOffset.toInt())
                 editor.putInt("rightEyeOffset", rightEyeOffset.toInt())
                 editor.putFloat("convergenceFactor", convergenceFactor)
+                editor.putFloat("sharpness", sharpness)
+                editor.putFloat("contrast", contrast)
+                editor.putFloat("brightness", brightness)
+                editor.putFloat("saturation", saturation)
+                editor.putFloat("verticalScale", verticalScale)
                 editor.apply()
-                android.util.Log.d("VeilRenderer", "Saved config: L=${leftEyeOffset.toInt()}, R=${rightEyeOffset.toInt()}, C=$convergenceFactor")
+                android.util.Log.d("VeilRenderer", "Saved config: L=${leftEyeOffset.toInt()}, R=${rightEyeOffset.toInt()}, C=$convergenceFactor, Sharp=$sharpness, Cont=$contrast, Bright=$brightness, Sat=$saturation, VertScale=$verticalScale")
             }
+        }
+        
+        fun flashRed() {
+            redFlashUntil = System.currentTimeMillis() + 500  // Flash for 500ms
         }
         
         override fun onDrawFrame(gl: GL10?) {
@@ -754,7 +1079,18 @@ class MainActivity : Activity() {
                 GLES30.glViewport(0, 0, screenWidth, screenHeight)
             }
             
+            // Check if we should flash red
+            val shouldFlashRed = System.currentTimeMillis() < redFlashUntil
+            if (shouldFlashRed) {
+                GLES30.glClearColor(1.0f, 0.0f, 0.0f, 1.0f)  // Red
+            } else {
+                GLES30.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)  // Black
+            }
+            
             GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+            
+            // If flashing red, don't render camera - just show red screen
+            if (shouldFlashRed) return
             
             // Always update texture if available, but don't skip rendering if no new frame
             if (frameAvailable) {
@@ -776,6 +1112,15 @@ class MainActivity : Activity() {
             GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
             GLES30.glUseProgram(shaderProgram)
             GLES30.glUniformMatrix4fv(uTexMatrixLoc, 1, false, texMatrix, 0)
+            
+            // Set post-processing uniforms
+            if (uSharpnessLoc >= 0) GLES30.glUniform1f(uSharpnessLoc, sharpness)
+            if (uContrastLoc >= 0) GLES30.glUniform1f(uContrastLoc, contrast)
+            if (uBrightnessLoc >= 0) GLES30.glUniform1f(uBrightnessLoc, brightness)
+            if (uSaturationLoc >= 0) GLES30.glUniform1f(uSaturationLoc, saturation)
+            if (uTexSizeLoc >= 0 && cameraWidth > 0 && cameraHeight > 0) {
+                GLES30.glUniform2f(uTexSizeLoc, cameraWidth.toFloat(), cameraHeight.toFloat())
+            }
             
             // Calculate convergence (how close together the images are)
             val halfWidth = 0.5f * (1.0f - convergenceFactor)
@@ -915,10 +1260,43 @@ class MainActivity : Activity() {
                 #extension GL_OES_EGL_image_external : require
                 precision mediump float;
                 uniform samplerExternalOES sTexture;
+                uniform float uSharpness;
+                uniform float uContrast;
+                uniform float uBrightness;
+                uniform float uSaturation;
+                uniform vec2 uTexSize;
                 varying vec2 vTextureCoord;
                 
                 void main() {
-                    gl_FragColor = texture2D(sTexture, vTextureCoord);
+                    vec2 texelSize = 1.0 / uTexSize;
+                    vec4 color = texture2D(sTexture, vTextureCoord);
+                    
+                    // Unsharp mask for sharpening
+                    vec4 blur = vec4(0.0);
+                    blur += texture2D(sTexture, vTextureCoord + vec2(-texelSize.x, -texelSize.y)) * 0.0625;
+                    blur += texture2D(sTexture, vTextureCoord + vec2(0.0, -texelSize.y)) * 0.125;
+                    blur += texture2D(sTexture, vTextureCoord + vec2(texelSize.x, -texelSize.y)) * 0.0625;
+                    blur += texture2D(sTexture, vTextureCoord + vec2(-texelSize.x, 0.0)) * 0.125;
+                    blur += texture2D(sTexture, vTextureCoord) * 0.25;
+                    blur += texture2D(sTexture, vTextureCoord + vec2(texelSize.x, 0.0)) * 0.125;
+                    blur += texture2D(sTexture, vTextureCoord + vec2(-texelSize.x, texelSize.y)) * 0.0625;
+                    blur += texture2D(sTexture, vTextureCoord + vec2(0.0, texelSize.y)) * 0.125;
+                    blur += texture2D(sTexture, vTextureCoord + vec2(texelSize.x, texelSize.y)) * 0.0625;
+                    
+                    // Apply sharpening
+                    color = mix(color, color + (color - blur) * uSharpness, uSharpness);
+                    
+                    // Apply contrast (center at 0.5)
+                    color.rgb = (color.rgb - 0.5) * uContrast + 0.5;
+                    
+                    // Apply brightness
+                    color.rgb += uBrightness;
+                    
+                    // Apply saturation
+                    float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+                    color.rgb = mix(vec3(gray), color.rgb, uSaturation);
+                    
+                    gl_FragColor = color;
                 }
             """.trimIndent()
         }
