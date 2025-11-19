@@ -4,7 +4,7 @@
             "outputFile": "com.veil.renderer.app-mergeDebugResources-31:/values-en-rIN/values-en-rIN.xml",
             "map": [
                 {
-                    "source": "/Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/cef816511ea471ee061a42cbdef31dfc/transformed/core-1.13.1/res/values-en-rIN/values-en-rIN.xml",
+                    "source": "C:\\Users\\sciam\\.gradle\\caches\\9.0-milestone-1\\transforms\\cef816511ea471ee061a42cbdef31dfc\\transformed\\core-1.13.1\\res\\values-en-rIN\\values-en-rIN.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",
@@ -21,7 +21,7 @@
                     }
                 },
                 {
-                    "source": "/Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/818440df55c5b22950fdce982f2f1b19/transformed/appcompat-1.6.1/res/values-en-rIN/values-en-rIN.xml",
+                    "source": "C:\\Users\\sciam\\.gradle\\caches\\9.0-milestone-1\\transforms\\818440df55c5b22950fdce982f2f1b19\\transformed\\appcompat-1.6.1\\res\\values-en-rIN\\values-en-rIN.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",

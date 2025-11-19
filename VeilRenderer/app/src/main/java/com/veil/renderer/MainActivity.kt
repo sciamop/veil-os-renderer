@@ -23,6 +23,7 @@ import android.widget.TextView
 import android.graphics.Typeface
 import android.view.Gravity
 import android.media.MediaCodec
+import android.media.ToneGenerator
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -64,9 +65,11 @@ class MainActivity : Activity() {
     private var isListening = false
     private var currentCtrlBlock: USBMonitor.UsbControlBlock? = null
     private var currentResolutionIndex = 1  // Start at 2560x720 (index 1)
+    private var isChangingResolution = false  // Prevent concurrent resolution changes
     private var overlayLeftEye: TextView? = null
     private var overlayRightEye: TextView? = null
     private var overlayHideHandler: Handler? = null
+    private var toneGenerator: ToneGenerator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -186,17 +189,20 @@ class MainActivity : Activity() {
         
         container.addView(glSurfaceView)
         
-        // Create stereoscopic overlays - one for each eye, centered in each eye's viewport
+        // Create overlay - only in left eye, smaller and centered
         overlayLeftEye = TextView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
+            val params = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             )
+            params.gravity = Gravity.NO_GRAVITY  // Use explicit margins
+            layoutParams = params
             setTextColor(android.graphics.Color.WHITE)
             setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            textSize = 12f
+            textSize = 10f  // Smaller text size
             setBackgroundColor(android.graphics.Color.argb(180, 0, 0, 0))  // Semi-transparent black
-            setPadding(16, 8, 16, 8)
+            setPadding(12, 6, 12, 6)  // Smaller padding
+            gravity = android.view.Gravity.CENTER  // Center text within the TextView itself
             visibility = View.GONE
         }
         
@@ -215,6 +221,8 @@ class MainActivity : Activity() {
         
         container.addView(overlayLeftEye)
         container.addView(overlayRightEye)
+        // Keep right eye overlay hidden - overlay only shows in left eye
+        overlayRightEye?.visibility = View.GONE
         
         // Update overlay positions when layout changes
         container.viewTreeObserver.addOnGlobalLayoutListener {
@@ -222,6 +230,13 @@ class MainActivity : Activity() {
         }
         
         overlayHideHandler = Handler(mainLooper)
+        
+        // Initialize tone generator for chime feedback
+        try {
+            toneGenerator = ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+        } catch (e: Exception) {
+            android.util.Log.w("VeilRenderer", "Could not initialize tone generator", e)
+        }
         
         setContentView(container)
         
@@ -308,6 +323,8 @@ class MainActivity : Activity() {
         usbMonitor?.unregister()
         usbMonitor?.destroy()
         usbMonitor = null
+        toneGenerator?.release()
+        toneGenerator = null
     }
     
     private fun startContinuousListening() {
@@ -434,22 +451,34 @@ class MainActivity : Activity() {
     }
     
     private fun updateOverlayPositions() {
+        // Get screen dimensions from display metrics
         val displayMetrics = resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels
         val screenHeight = displayMetrics.heightPixels
         
         overlayLeftEye?.let { left ->
-            val params = left.layoutParams as FrameLayout.LayoutParams
-            left.measure(
-                View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST),
-                View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
-            )
-            val leftWidth = left.measuredWidth
-            val leftHeight = left.measuredHeight
-            // Center of left half: x = screenWidth/4, y = screenHeight/2
-            params.leftMargin = (screenWidth / 4) - (leftWidth / 2)
-            params.topMargin = (screenHeight / 2) - (leftHeight / 2)
-            left.layoutParams = params
+            val parent = left.parent as? FrameLayout
+            if (parent != null) {
+                val parentWidth = parent.width
+                val parentHeight = parent.height
+                
+                if (parentWidth > 0 && parentHeight > 0) {
+                    val params = left.layoutParams as FrameLayout.LayoutParams
+                    // Constrain measurement to left half of screen
+                    left.measure(
+                        View.MeasureSpec.makeMeasureSpec(parentWidth / 2, View.MeasureSpec.AT_MOST),
+                        View.MeasureSpec.makeMeasureSpec(parentHeight, View.MeasureSpec.AT_MOST)
+                    )
+                    val leftWidth = left.measuredWidth
+                    val leftHeight = left.measuredHeight
+                    // Center of left eye frame: x = parentWidth/4 (center of left half), y = parentHeight/2 (vertical center)
+                    params.leftMargin = (parentWidth / 4) - (leftWidth / 2)
+                    params.topMargin = (parentHeight / 2) - (leftHeight / 2)
+                    params.gravity = Gravity.NO_GRAVITY  // Use explicit margins, not gravity
+                    left.layoutParams = params
+                    android.util.Log.d("VeilRenderer", "Overlay positioned: leftMargin=${params.leftMargin}, topMargin=${params.topMargin}, screen=$parentWidth x $parentHeight")
+                }
+            }
         }
         
         overlayRightEye?.let { right ->
@@ -469,20 +498,25 @@ class MainActivity : Activity() {
     
     private fun showOverlay(message: String, durationMs: Long = 2000) {
         overlayHideHandler?.removeCallbacksAndMessages(null)  // Cancel any pending hide
+        // Only show overlay in left eye
         overlayLeftEye?.let { overlay ->
             overlay.text = message
             overlay.visibility = View.VISIBLE
             updateOverlayPositions()  // Update positions when showing
         }
-        overlayRightEye?.let { overlay ->
-            overlay.text = message
-            overlay.visibility = View.VISIBLE
-            updateOverlayPositions()  // Update positions when showing
-        }
+        // Keep right eye overlay hidden
+        overlayRightEye?.visibility = View.GONE
         overlayHideHandler?.postDelayed({
             overlayLeftEye?.visibility = View.GONE
-            overlayRightEye?.visibility = View.GONE
         }, durationMs)
+    }
+    
+    private fun playChime() {
+        try {
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 150)  // Play a pleasant beep for 150ms
+        } catch (e: Exception) {
+            android.util.Log.w("VeilRenderer", "Could not play chime", e)
+        }
     }
     
     private fun parseVoiceCommand(text: String) {
@@ -514,6 +548,7 @@ class MainActivity : Activity() {
                         renderer?.adjustLeftEyeOffset(offset)
                         val current = renderer?.getLeftEyeOffset() ?: 0
                         showOverlay("LEFT EYE: ${current}px\nRange: unlimited")
+                        playChime()
                         android.util.Log.d("VeilRenderer", "✓ Viewer's left ${if (isIn) "in" else "out"} $pixels pixels")
                     } else if (isRight) {
                         // Viewer's right: "in" = move left (negative), "out" = move right (positive)
@@ -521,6 +556,7 @@ class MainActivity : Activity() {
                         renderer?.adjustRightEyeOffset(offset)
                         val current = renderer?.getRightEyeOffset() ?: 0
                         showOverlay("RIGHT EYE: ${current}px\nRange: unlimited")
+                        playChime()
                         android.util.Log.d("VeilRenderer", "✓ Viewer's right ${if (isIn) "in" else "out"} $pixels pixels")
                     }
                 }
@@ -532,6 +568,7 @@ class MainActivity : Activity() {
                     val clamped = value.coerceIn(0f, 1f)
                     renderer?.setConvergenceFactor(clamped)
                     showOverlay("CONVERGENCE: ${String.format("%.2f", clamped)}\nRange: 0.0 - 1.0")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Convergence: $clamped")
                 }
                 
@@ -551,6 +588,7 @@ class MainActivity : Activity() {
                     val clamped = value.coerceIn(0f, 1f)
                     renderer?.setSharpness(clamped)
                     showOverlay("SHARPNESS: ${String.format("%.2f", clamped)}\nRange: 0.0 - 1.0")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Sharpness: $clamped")
                 }
                 
@@ -560,6 +598,7 @@ class MainActivity : Activity() {
                     val clamped = value.coerceIn(0.5f, 1.5f)
                     renderer?.setContrast(clamped)
                     showOverlay("CONTRAST: ${String.format("%.2f", clamped)}\nRange: 0.5 - 1.5")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Contrast: $clamped")
                 }
                 
@@ -569,6 +608,7 @@ class MainActivity : Activity() {
                     val clamped = value.coerceIn(-0.5f, 0.5f)
                     renderer?.setBrightness(clamped)
                     showOverlay("BRIGHTNESS: ${String.format("%.2f", clamped)}\nRange: -0.5 - 0.5")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Brightness: $clamped")
                 }
                 
@@ -578,6 +618,7 @@ class MainActivity : Activity() {
                     val clamped = value.coerceIn(0f, 2f)
                     renderer?.setSaturation(clamped)
                     showOverlay("SATURATION: ${String.format("%.2f", clamped)}\nRange: 0.0 - 2.0")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Saturation: $clamped")
                 }
                 
@@ -589,6 +630,7 @@ class MainActivity : Activity() {
                     val newValue = (current + delta).coerceIn(0.1f, 3.0f)
                     renderer?.setVerticalScale(newValue)
                     showOverlay("VERTICAL SCALE: ${String.format("%.2f", newValue)}\nRange: 0.1 - 3.0\n(compress = shorter, stretch = taller)")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Compress: $newValue")
                 }
                 
@@ -599,6 +641,7 @@ class MainActivity : Activity() {
                     val newValue = (current + delta).coerceIn(0.1f, 3.0f)
                     renderer?.setVerticalScale(newValue)
                     showOverlay("VERTICAL SCALE: ${String.format("%.2f", newValue)}\nRange: 0.1 - 3.0\n(compress = shorter, stretch = taller)")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Stretch: $newValue")
                 }
                 
@@ -610,6 +653,7 @@ class MainActivity : Activity() {
                     renderer?.setSaturation(1.0f)
                     renderer?.setVerticalScale(1.0f)
                     showOverlay("RESET:\nSharpness: 0.50\nContrast: 1.00\nBrightness: 0.00\nSaturation: 1.00\nVertical Scale: 1.00")
+                    playChime()
                     android.util.Log.d("VeilRenderer", "✓ Reset filters and scaling")
                 }
                 
@@ -623,6 +667,12 @@ class MainActivity : Activity() {
     }
 
     private fun changeResolution(direction: Int) {
+        // Prevent concurrent resolution changes
+        if (isChangingResolution) {
+            android.util.Log.d("VeilRenderer", "Resolution change already in progress, ignoring")
+            return
+        }
+        
         val newIndex = currentResolutionIndex - direction  // -1 for UP (higher res), +1 for DOWN (lower res)
         val wasAtMin = currentResolutionIndex == RESOLUTIONS.size - 1
         val wasAtMax = currentResolutionIndex == 0
@@ -648,6 +698,7 @@ class MainActivity : Activity() {
             else append("DOWN: MIN")
         }
         showOverlay(overlayText)
+        playChime()
         android.util.Log.d("VeilRenderer", "Changing resolution to: ${newRes.first}x${newRes.second}")
         
         // Save resolution preference
@@ -655,16 +706,49 @@ class MainActivity : Activity() {
         prefs.edit().putInt("resolutionIndex", currentResolutionIndex).apply()
         
         // Reopen camera with new resolution
-        currentCtrlBlock?.let { ctrlBlock ->
-            // Stop current camera
-            uvcCamera?.stopPreview()
-            uvcCamera?.destroy()
+        val ctrlBlock = currentCtrlBlock
+        if (ctrlBlock != null) {
+            isChangingResolution = true
+            
+            // Stop current camera properly
+            try {
+                uvcCamera?.stopPreview()
+            } catch (e: Exception) {
+                android.util.Log.w("VeilRenderer", "Error stopping preview", e)
+            }
+            
+            // Don't release cameraSurface - it's managed by the renderer
+            // Just clear our reference
+            cameraSurface = null
+            
+            try {
+                uvcCamera?.destroy()
+            } catch (e: Exception) {
+                android.util.Log.w("VeilRenderer", "Error destroying camera", e)
+            }
             uvcCamera = null
             
-            // Small delay then reopen
+            // Wait longer for camera to fully release before reopening
             Handler(mainLooper).postDelayed({
-                openCamera(ctrlBlock)
-            }, 100)
+                try {
+                    openCamera(ctrlBlock)
+                    isChangingResolution = false
+                } catch (e: Exception) {
+                    android.util.Log.e("VeilRenderer", "Error reopening camera", e)
+                    // Try again after another delay
+                    Handler(mainLooper).postDelayed({
+                        try {
+                            openCamera(ctrlBlock)
+                            isChangingResolution = false
+                        } catch (e2: Exception) {
+                            android.util.Log.e("VeilRenderer", "Failed to reopen camera after retry", e2)
+                            isChangingResolution = false
+                        }
+                    }, 1000)
+                }
+            }, 500)  // Increased delay to 500ms to ensure camera is fully released
+        } else {
+            android.util.Log.w("VeilRenderer", "No control block available for resolution change")
         }
     }
     
@@ -686,11 +770,14 @@ class MainActivity : Activity() {
             
             // Wait for renderer surface to be ready
             glSurfaceView.post {
+                // Get fresh surface from renderer
                 cameraSurface = renderer?.getDecoderSurface()
                 
                 if (cameraSurface != null) {
                     android.util.Log.d("VeilRenderer", "Surface ready, configuring camera")
-                    try {
+                    // Small delay to ensure surface is fully ready
+                    Handler(mainLooper).postDelayed({
+                        try {
                         // Get supported sizes
                         val supportedSizes = uvcCamera?.supportedSizeList
                         android.util.Log.d("VeilRenderer", "ELP 3D-1080p V85 - Supported sizes: $supportedSizes")
@@ -773,10 +860,11 @@ class MainActivity : Activity() {
                         } else {
                             android.util.Log.e("VeilRenderer", "No supported size found!")
                         }
-                    } catch (e: Exception) {
-                        android.util.Log.e("VeilRenderer", "Error configuring camera", e)
-                        e.printStackTrace()
-                    }
+                        } catch (e: Exception) {
+                            android.util.Log.e("VeilRenderer", "Error configuring camera", e)
+                            e.printStackTrace()
+                        }
+                    }, 100)  // Small delay to ensure surface is ready
                 } else {
                     android.util.Log.e("VeilRenderer", "Surface not available!")
                 }
