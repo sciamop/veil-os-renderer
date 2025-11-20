@@ -22,6 +22,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import android.graphics.Typeface
 import android.view.Gravity
+import android.media.AudioManager
 import android.media.MediaCodec
 import android.media.ToneGenerator
 import android.speech.RecognitionListener
@@ -77,6 +78,11 @@ class MainActivity : Activity() {
     private var overlayHideHandler: Handler? = null
     private var toneGenerator: ToneGenerator? = null
     private var recordingIndicator: View? = null
+    
+    // Audio hack for silencing beep during speech recognition
+    private lateinit var audioManager: AudioManager
+    private var originalNotificationVolume = 0
+    private var originalAlarmVolume = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,6 +119,7 @@ class MainActivity : Activity() {
         }
 
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         usbMonitor = USBMonitor(this, object : USBMonitor.OnDeviceConnectListener {
             override fun onAttach(device: UsbDevice) {
                 requestUsbPermission(device)
@@ -206,7 +213,7 @@ class MainActivity : Activity() {
             layoutParams = params
             setTextColor(android.graphics.Color.WHITE)
             setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            textSize = 10f  // Smaller text size
+            textSize = 7f  // 30% smaller (was 10f)
             setBackgroundColor(android.graphics.Color.argb(180, 0, 0, 0))  // Semi-transparent black
             setPadding(12, 6, 12, 6)  // Smaller padding
             gravity = android.view.Gravity.CENTER  // Center text within the TextView itself
@@ -220,7 +227,7 @@ class MainActivity : Activity() {
             )
             setTextColor(android.graphics.Color.WHITE)
             setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            textSize = 12f
+            textSize = 8f  // 30% smaller (was 12f)
             setBackgroundColor(android.graphics.Color.argb(180, 0, 0, 0))  // Semi-transparent black
             setPadding(16, 8, 16, 8)
             visibility = View.GONE
@@ -283,10 +290,46 @@ class MainActivity : Activity() {
     }
 
     private fun saveAllSettings() {
-        // Save resolution (renderer settings are saved automatically via saveConfiguration() when changed)
+        // Save resolution
         val prefs = getPreferences()
-        prefs.edit().putInt("resolutionIndex", currentResolutionIndex).commit()  // Use commit() for critical settings to ensure they're written immediately
+        prefs.edit().putInt("resolutionIndex", currentResolutionIndex).commit()
+        
+        // Force renderer to save all its current settings
+        renderer?.forceSaveConfiguration()
+        
         android.util.Log.d("VeilRenderer", "All settings saved (resolution: $currentResolutionIndex)")
+    }
+
+    private fun getConfigSummary(): String {
+        val r = renderer ?: return "No renderer"
+        val res = RESOLUTIONS.getOrNull(currentResolutionIndex) ?: Pair(0, 0)
+        val lensCoeffs = r.getLensCoefficients()
+        
+        // Convert values to 0-100 display scale
+        val sharpnessDisplay = (r.getSharpness() * 100).toInt()
+        val contrastDisplay = ((r.getContrast() - 0.5f) / 1.0f * 100).toInt().coerceIn(0, 100)
+        val brightnessDisplay = ((r.getBrightness() + 0.5f) / 1.0f * 100).toInt().coerceIn(0, 100)
+        val saturationDisplay = (r.getSaturation() / 2.0f * 100).toInt()
+        val verticalScaleDisplay = ((r.getVerticalScale() - 0.1f) / 2.9f * 100).toInt().coerceIn(0, 100)
+        
+        return buildString {
+            append("CONFIG SAVED\n")
+            append("─────────────\n")
+            append("Resolution: ${res.first}x${res.second}\n")
+            append("Left Eye: H=${r.getLeftEyeOffset()}px V=${r.getLeftEyeOffsetY()}px\n")
+            append("Right Eye: H=${r.getRightEyeOffset()}px V=${r.getRightEyeOffsetY()}px\n")
+            append("Convergence: ${(r.getConvergenceFactor() * 100).toInt()}%\n")
+            append("Vertical Scale: ${verticalScaleDisplay}%\n")
+            append("Sharpness: ${sharpnessDisplay}%\n")
+            append("Contrast: ${contrastDisplay}%\n")
+            append("Brightness: ${brightnessDisplay}%\n")
+            append("Saturation: ${saturationDisplay}%\n")
+            if (lensCoeffs.isNotEmpty()) {
+                append("Lens K1: ${String.format("%.3f", lensCoeffs[0])}\n")
+                append("Lens K2: ${String.format("%.3f", lensCoeffs[1])}\n")
+                append("Lens K3: ${String.format("%.3f", lensCoeffs[2])}")
+            }
+        }
     }
 
     private fun loadConfiguration() {
@@ -318,7 +361,7 @@ class MainActivity : Activity() {
             prefs.getFloat("lensCenterRightY", DEFAULT_LENS_CENTER_Y)
         )
 
-        android.util.Log.d("VeilRenderer", "Loaded config: L=$leftEyeOffset, R=$rightEyeOffset, C=$convergenceFactor, Res=${currentResolutionIndex}")
+        android.util.Log.d("VeilRenderer", "Loaded config: L=$leftEyeOffset, R=$rightEyeOffset, LY=${prefs.getInt("leftEyeOffsetY", 0)}, RY=${prefs.getInt("rightEyeOffsetY", 0)}, C=$convergenceFactor, VertScale=${prefs.getFloat("verticalScale", 1.0f)}, Res=${currentResolutionIndex}, K1=$k1, K2=$k2, K3=$k3")
     }
 
 
@@ -371,6 +414,7 @@ class MainActivity : Activity() {
         usbMonitor = null
         toneGenerator?.release()
         toneGenerator = null
+        unmuteSystemSound()  // Restore system sounds when app closes
     }
 
     private fun startContinuousListening() {
@@ -426,9 +470,11 @@ class MainActivity : Activity() {
             speechRecognizer?.stopListening()
             isListening = false
             recordingIndicator?.visibility = View.GONE
+            unmuteSystemSound()  // Restore system sounds when stopping
         } catch (e: Exception) {
             isListening = false
             recordingIndicator?.visibility = View.GONE
+            unmuteSystemSound()  // Restore system sounds even on error
         }
     }
 
@@ -437,6 +483,7 @@ class MainActivity : Activity() {
             override fun onReadyForSpeech(params: Bundle?) {
                 isListening = true
                 recordingIndicator?.visibility = View.VISIBLE
+                muteSystemSound()  // Mute system sounds when mic is hot
             }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
@@ -448,6 +495,7 @@ class MainActivity : Activity() {
             override fun onError(error: Int) {
                 isListening = false
                 recordingIndicator?.visibility = View.GONE
+                unmuteSystemSound()  // Restore system sounds when mic stops
                 android.util.Log.d("VeilRenderer", "Speech recognition error: $error")
 
                 // Handle ERROR_RECOGNIZER_BUSY specially
@@ -483,6 +531,7 @@ class MainActivity : Activity() {
             override fun onResults(results: Bundle?) {
                 isListening = false
                 recordingIndicator?.visibility = View.GONE
+                unmuteSystemSound()  // Restore system sounds when recognition completes
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (matches != null && matches.isNotEmpty()) {
                     val spokenText = matches[0].lowercase().trim()
@@ -597,6 +646,30 @@ class MainActivity : Activity() {
     private fun playChime() {
         // Disabled - tone generator not producing subtle click sound
         // Could implement with MediaPlayer and a click sound file if needed
+    }
+
+    // --- AUDIO HACK FOR SILENCING BEEP ---
+    private fun muteSystemSound() {
+        try {
+            originalNotificationVolume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
+            originalAlarmVolume = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+            
+            // Mute Notification and Alarm streams
+            audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, 0, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, 0, 0)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun unmuteSystemSound() {
+        try {
+            // Restore original volumes
+            audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, originalNotificationVolume, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, originalAlarmVolume, 0)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun parseVoiceCommand(text: String) {
@@ -784,6 +857,15 @@ class MainActivity : Activity() {
                     android.util.Log.d("VeilRenderer", "✓ Stretch: $clampedInput -> $newValue")
                 }
 
+                // Save configuration and show summary
+                text.contains("save", ignoreCase = true) -> {
+                    saveAllSettings()
+                    val summary = getConfigSummary()
+                    showOverlay(summary, 5000)  // Show for 5 seconds
+                    playChime()
+                    android.util.Log.d("VeilRenderer", "✓ Configuration saved")
+                }
+
                 // Reset filters and scaling (but NOT eye position or resolution)
                 text.contains("reset", ignoreCase = true) -> {
                     renderer?.setSharpness(0.5f)  // 50 in 0-100 scale
@@ -829,6 +911,29 @@ class MainActivity : Activity() {
                         val formatted = formatLensCoefficient(clamped)
                         showOverlay("LENS K3: $formatted")
                         android.util.Log.d("VeilRenderer", "✓ Lens k3 set to $formatted")
+                    }
+                }
+
+                // Barrel distortion adjustment: "barrel up" (increase) or "barrel down" (decrease)
+                text.contains("barrel", ignoreCase = true) && words.contains("up") -> {
+                    val delta = 0.05f  // Step size for barrel adjustment
+                    renderer?.adjustBarrelDistortion(delta)
+                    renderer?.let { r ->
+                        val coeffs = r.getLensCoefficients()
+                        showOverlay("BARREL UP\nK1: ${String.format("%.3f", coeffs[0])}\nK2: ${String.format("%.3f", coeffs[1])}\nK3: ${String.format("%.3f", coeffs[2])}")
+                        playChime()
+                        android.util.Log.d("VeilRenderer", "✓ Barrel distortion increased")
+                    }
+                }
+
+                text.contains("barrel", ignoreCase = true) && words.contains("down") -> {
+                    val delta = -0.05f  // Step size for barrel adjustment (negative to decrease)
+                    renderer?.adjustBarrelDistortion(delta)
+                    renderer?.let { r ->
+                        val coeffs = r.getLensCoefficients()
+                        showOverlay("BARREL DOWN\nK1: ${String.format("%.3f", coeffs[0])}\nK2: ${String.format("%.3f", coeffs[1])}\nK3: ${String.format("%.3f", coeffs[2])}")
+                        playChime()
+                        android.util.Log.d("VeilRenderer", "✓ Barrel distortion decreased")
                     }
                 }
 
@@ -1446,6 +1551,11 @@ class MainActivity : Activity() {
             android.util.Log.d("VeilRenderer", "Saturation set to: $saturation")
         }
 
+        fun getSharpness(): Float = sharpness
+        fun getContrast(): Float = contrast
+        fun getBrightness(): Float = brightness
+        fun getSaturation(): Float = saturation
+
         fun setVerticalScale(value: Float) {
             verticalScale = value.coerceIn(0.1f, 3.0f)
             updateMVPMatrix()
@@ -1469,6 +1579,29 @@ class MainActivity : Activity() {
             saveConfiguration()
             glView.post { glView.requestRender() }
             android.util.Log.d("VeilRenderer", "Lens coefficients set to: k1=$k1, k2=$k2, k3=$k3")
+        }
+
+        fun adjustBarrelDistortion(delta: Float) {
+            // Adjust k1 primarily (barrel distortion), and k2/k3 proportionally
+            // Negative k1 = barrel distortion, positive = pincushion
+            // To increase barrel: make k1 more negative
+            // To decrease barrel: make k1 less negative (closer to 0)
+            val currentK1 = lensCoefficients[0]
+            val currentK2 = lensCoefficients[1]
+            val currentK3 = lensCoefficients[2]
+            
+            // Adjust k1 (primary barrel control)
+            val newK1 = (currentK1 - delta).coerceIn(-2.0f, 2.0f)
+            
+            // Adjust k2 and k3 proportionally (maintain their ratio to k1)
+            val k2Ratio = if (currentK1 != 0f) currentK2 / currentK1 else 0f
+            val k3Ratio = if (currentK1 != 0f) currentK3 / currentK1 else 0f
+            
+            val newK2 = if (newK1 != 0f) (newK1 * k2Ratio).coerceIn(-2.0f, 2.0f) else currentK2.coerceIn(-2.0f, 2.0f)
+            val newK3 = if (newK1 != 0f) (newK1 * k3Ratio).coerceIn(-2.0f, 2.0f) else currentK3.coerceIn(-2.0f, 2.0f)
+            
+            setLensCoefficients(newK1, newK2, newK3)
+            android.util.Log.d("VeilRenderer", "Barrel distortion adjusted: k1=$newK1, k2=$newK2, k3=$newK3")
         }
 
         fun setLensCenters(leftX: Float, leftY: Float, rightX: Float, rightY: Float) {
@@ -1502,6 +1635,11 @@ class MainActivity : Activity() {
         fun getRightEyeOffset(): Int = rightEyeOffset.toInt()
         fun getConvergenceFactor(): Float = convergenceFactor
         fun getLensCoefficients(): FloatArray = lensCoefficients.copyOf()
+        
+        fun forceSaveConfiguration() {
+            // Public method to force save current configuration
+            saveConfiguration()
+        }
 
         private fun saveConfiguration() {
             // Save to SharedPreferences via MainActivity
