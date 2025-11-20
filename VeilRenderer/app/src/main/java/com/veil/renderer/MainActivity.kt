@@ -70,6 +70,7 @@ class MainActivity : Activity() {
     private var overlayRightEye: TextView? = null
     private var overlayHideHandler: Handler? = null
     private var toneGenerator: ToneGenerator? = null
+    private var recordingIndicator: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -224,6 +225,22 @@ class MainActivity : Activity() {
         // Keep right eye overlay hidden - overlay only shows in left eye
         overlayRightEye?.visibility = View.GONE
         
+        // Create green recording indicator circle (4dp diameter, positioned in left eye)
+        val indicatorSize = (4 * resources.displayMetrics.density).toInt()  // 4dp to pixels
+        recordingIndicator = View(this).apply {
+            val params = FrameLayout.LayoutParams(indicatorSize, indicatorSize)
+            params.gravity = Gravity.NO_GRAVITY
+            layoutParams = params
+            setBackgroundColor(android.graphics.Color.GREEN)
+            // Make it circular
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(android.graphics.Color.GREEN)
+            }
+            visibility = View.GONE
+        }
+        container.addView(recordingIndicator)
+        
         // Update overlay positions when layout changes
         container.viewTreeObserver.addOnGlobalLayoutListener {
             updateOverlayPositions()
@@ -231,9 +248,9 @@ class MainActivity : Activity() {
         
         overlayHideHandler = Handler(mainLooper)
         
-        // Initialize tone generator for chime feedback
+        // Initialize tone generator for chime feedback (lower volume for subtle click)
         try {
-            toneGenerator = ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+            toneGenerator = ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 30)  // Lower volume (30 instead of 100) for subtle sound
         } catch (e: Exception) {
             android.util.Log.w("VeilRenderer", "Could not initialize tone generator", e)
         }
@@ -358,14 +375,17 @@ class MainActivity : Activity() {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                // Use default timeout settings - custom timeouts were preventing recognition
             }
             
             try {
                 isListening = true
                 speechRecognizer?.startListening(intent)
+                // Indicator will show in onReadyForSpeech callback
                 android.util.Log.d("VeilRenderer", "Started listening")
             } catch (e: Exception) {
                 isListening = false
+                recordingIndicator?.visibility = View.GONE
                 android.util.Log.e("VeilRenderer", "Speech recognition error", e)
             }
         }, 200)  // Wait 200ms after stopping
@@ -376,8 +396,10 @@ class MainActivity : Activity() {
         try {
             speechRecognizer?.stopListening()
             isListening = false
+            recordingIndicator?.visibility = View.GONE
         } catch (e: Exception) {
             isListening = false
+            recordingIndicator?.visibility = View.GONE
         }
     }
     
@@ -385,15 +407,19 @@ class MainActivity : Activity() {
         return object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 isListening = true
+                recordingIndicator?.visibility = View.VISIBLE
             }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() {
-                isListening = false
+                // Don't set isListening = false here - wait for results or error
+                // This keeps the mic indicator on during processing
             }
             override fun onError(error: Int) {
                 isListening = false
+                recordingIndicator?.visibility = View.GONE
+                android.util.Log.d("VeilRenderer", "Speech recognition error: $error")
                 
                 // Handle ERROR_RECOGNIZER_BUSY specially
                 if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
@@ -409,33 +435,38 @@ class MainActivity : Activity() {
                             == PackageManager.PERMISSION_GRANTED && !isListening) {
                             startContinuousListening()
                         }
-                    }, 1000)  // Wait longer for busy error
+                    }, 1000L)  // Wait longer for busy error
                 } else {
+                    // ERROR_NO_MATCH and ERROR_SPEECH_TIMEOUT are normal - just restart quickly
                     if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                         android.util.Log.w("VeilRenderer", "Speech error: $error")
                     }
+                    // Always restart - these errors are normal for continuous listening
                     Handler(mainLooper).postDelayed({
                         if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) 
                             == PackageManager.PERMISSION_GRANTED && !isListening) {
+                            android.util.Log.d("VeilRenderer", "Restarting listening after error")
                             startContinuousListening()
                         }
-                    }, 500)
+                    }, 200L)  // Quick restart for all errors
                 }
             }
             override fun onResults(results: Bundle?) {
                 isListening = false
+                recordingIndicator?.visibility = View.GONE
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (matches != null && matches.isNotEmpty()) {
                     val spokenText = matches[0].lowercase().trim()
                     android.util.Log.d("VeilRenderer", "Recognized: $spokenText")
                     parseVoiceCommand(spokenText)
                 }
+                // Restart quickly after processing results to maintain continuous listening
                 Handler(mainLooper).postDelayed({
                     if (ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.RECORD_AUDIO) 
                         == PackageManager.PERMISSION_GRANTED && !isListening) {
                         startContinuousListening()
                     }
-                }, 300)
+                }, 100)  // Reduced delay for faster restart
             }
             override fun onPartialResults(partialResults: Bundle?) {
                 // Process partial results to keep listening active
@@ -494,6 +525,29 @@ class MainActivity : Activity() {
             params.topMargin = (screenHeight / 2) - (rightHeight / 2)
             right.layoutParams = params
         }
+        
+        // Position recording indicator: 100px from left, 100px from bottom (in left eye viewport)
+        recordingIndicator?.let { indicator ->
+            val parent = indicator.parent as? FrameLayout
+            if (parent != null) {
+                val parentWidth = parent.width
+                val parentHeight = parent.height
+                
+                if (parentWidth > 0 && parentHeight > 0) {
+                    val params = indicator.layoutParams as FrameLayout.LayoutParams
+                    val indicatorSize = (4 * resources.displayMetrics.density).toInt()
+                    params.width = indicatorSize
+                    params.height = indicatorSize
+                    // Position in left eye frame: left half of screen, 100px from left edge of left eye, 100px from bottom
+                    // Since left eye is left half, 100px from left edge of screen is correct
+                    // But ensure it doesn't go beyond the left half boundary
+                    params.leftMargin = 100.coerceAtMost(parentWidth / 2 - indicatorSize)  // 100px from left, but stay within left half
+                    params.topMargin = parentHeight - 100 - indicatorSize  // 100 pixels from bottom
+                    params.gravity = Gravity.NO_GRAVITY
+                    indicator.layoutParams = params
+                }
+            }
+        }
     }
     
     private fun showOverlay(message: String, durationMs: Long = 2000) {
@@ -512,11 +566,8 @@ class MainActivity : Activity() {
     }
     
     private fun playChime() {
-        try {
-            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 150)  // Play a pleasant beep for 150ms
-        } catch (e: Exception) {
-            android.util.Log.w("VeilRenderer", "Could not play chime", e)
-        }
+        // Disabled - tone generator not producing subtle click sound
+        // Could implement with MediaPlayer and a click sound file if needed
     }
     
     private fun parseVoiceCommand(text: String) {
@@ -561,15 +612,17 @@ class MainActivity : Activity() {
                     }
                 }
                 
-                // Pattern: "convergence [number]" or "converge [number]"
+                // Pattern: "convergence [0-100]" or "converge [0-100]"
                 text.contains("converge", ignoreCase = true) -> {
-                    val numbers = words.mapNotNull { it.toFloatOrNull() }
-                    val value = numbers.lastOrNull() ?: 0.3f
-                    val clamped = value.coerceIn(0f, 1f)
-                    renderer?.setConvergenceFactor(clamped)
-                    showOverlay("CONVERGENCE: ${String.format("%.2f", clamped)}\nRange: 0.0 - 1.0")
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 30  // Default to 30 (middle)
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to 0.0-1.0
+                    val filterValue = clampedInput / 100.0f
+                    renderer?.setConvergenceFactor(filterValue)
+                    showOverlay("CONVERGENCE: $clampedInput\nRange: 0 - 100")
                     playChime()
-                    android.util.Log.d("VeilRenderer", "✓ Convergence: $clamped")
+                    android.util.Log.d("VeilRenderer", "✓ Convergence: $clampedInput -> $filterValue")
                 }
                 
                 // Resolution control: "UP" or "DOWN"
@@ -581,78 +634,106 @@ class MainActivity : Activity() {
                     changeResolution(-1)  // Decrease resolution (higher index)
                 }
                 
-                // Post-processing: "sharpness [number]", "contrast [number]", "brightness [number]", "saturation [number]"
+                // Post-processing: "sharpness [0-100]", "contrast [0-100]", "brightness [0-100]", "saturation [0-100]"
                 text.contains("sharpness", ignoreCase = true) || text.contains("sharp", ignoreCase = true) -> {
-                    val numbers = words.mapNotNull { it.toFloatOrNull() }
-                    val value = numbers.lastOrNull() ?: 0.5f
-                    val clamped = value.coerceIn(0f, 1f)
-                    renderer?.setSharpness(clamped)
-                    showOverlay("SHARPNESS: ${String.format("%.2f", clamped)}\nRange: 0.0 - 1.0")
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 50  // Default to 50 (middle)
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to 0.0-1.0
+                    val filterValue = clampedInput / 100.0f
+                    renderer?.setSharpness(filterValue)
+                    showOverlay("SHARPNESS: $clampedInput\nRange: 0 - 100")
                     playChime()
-                    android.util.Log.d("VeilRenderer", "✓ Sharpness: $clamped")
+                    android.util.Log.d("VeilRenderer", "✓ Sharpness: $clampedInput -> $filterValue")
                 }
                 
                 text.contains("contrast", ignoreCase = true) -> {
-                    val numbers = words.mapNotNull { it.toFloatOrNull() }
-                    val value = numbers.lastOrNull() ?: 1.0f
-                    val clamped = value.coerceIn(0.5f, 1.5f)
-                    renderer?.setContrast(clamped)
-                    showOverlay("CONTRAST: ${String.format("%.2f", clamped)}\nRange: 0.5 - 1.5")
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 50  // Default to 50 (middle)
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to 0.5-1.5 (0.5 + (value/100) * 1.0)
+                    val filterValue = 0.5f + (clampedInput / 100.0f) * 1.0f
+                    renderer?.setContrast(filterValue)
+                    showOverlay("CONTRAST: $clampedInput\nRange: 0 - 100")
                     playChime()
-                    android.util.Log.d("VeilRenderer", "✓ Contrast: $clamped")
+                    android.util.Log.d("VeilRenderer", "✓ Contrast: $clampedInput -> $filterValue")
                 }
                 
                 text.contains("brightness", ignoreCase = true) -> {
-                    val numbers = words.mapNotNull { it.toFloatOrNull() }
-                    val value = numbers.lastOrNull() ?: 0.0f
-                    val clamped = value.coerceIn(-0.5f, 0.5f)
-                    renderer?.setBrightness(clamped)
-                    showOverlay("BRIGHTNESS: ${String.format("%.2f", clamped)}\nRange: -0.5 - 0.5")
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 50  // Default to 50 (middle)
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to -0.5-0.5 ((value/100) * 1.0 - 0.5)
+                    val filterValue = (clampedInput / 100.0f) * 1.0f - 0.5f
+                    renderer?.setBrightness(filterValue)
+                    showOverlay("BRIGHTNESS: $clampedInput\nRange: 0 - 100")
                     playChime()
-                    android.util.Log.d("VeilRenderer", "✓ Brightness: $clamped")
+                    android.util.Log.d("VeilRenderer", "✓ Brightness: $clampedInput -> $filterValue")
                 }
                 
                 text.contains("saturation", ignoreCase = true) -> {
-                    val numbers = words.mapNotNull { it.toFloatOrNull() }
-                    val value = numbers.lastOrNull() ?: 1.0f
-                    val clamped = value.coerceIn(0f, 2f)
-                    renderer?.setSaturation(clamped)
-                    showOverlay("SATURATION: ${String.format("%.2f", clamped)}\nRange: 0.0 - 2.0")
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 50  // Default to 50 (middle)
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to 0.0-2.0 (value/100 * 2.0)
+                    val filterValue = (clampedInput / 100.0f) * 2.0f
+                    renderer?.setSaturation(filterValue)
+                    showOverlay("SATURATION: $clampedInput\nRange: 0 - 100")
                     playChime()
-                    android.util.Log.d("VeilRenderer", "✓ Saturation: $clamped")
+                    android.util.Log.d("VeilRenderer", "✓ Saturation: $clampedInput -> $filterValue")
                 }
                 
-                // Vertical scaling: "compress [number]" or "stretch [number]"
-                text.contains("compress", ignoreCase = true) -> {
-                    val numbers = words.mapNotNull { it.toFloatOrNull() }
-                    val delta = -(numbers.lastOrNull() ?: 0.1f) / 10.0f  // Negative delta = compress
-                    val current = renderer?.getVerticalScale() ?: 1.0f
-                    val newValue = (current + delta).coerceIn(0.1f, 3.0f)
-                    renderer?.setVerticalScale(newValue)
-                    showOverlay("VERTICAL SCALE: ${String.format("%.2f", newValue)}\nRange: 0.1 - 3.0\n(compress = shorter, stretch = taller)")
+                // Vertical scaling: "compress [0-100]" or "stretch [0-100]" or "vertical scale [0-100]"
+                text.contains("vertical scale", ignoreCase = true) || text.contains("vertical", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 50  // Default to 50 (middle)
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to 0.1-3.0 (0.1 + (value/100) * 2.9)
+                    val filterValue = 0.1f + (clampedInput / 100.0f) * 2.9f
+                    renderer?.setVerticalScale(filterValue)
+                    showOverlay("VERTICAL SCALE: $clampedInput\nRange: 0 - 100\n(0 = compressed, 100 = stretched)")
                     playChime()
-                    android.util.Log.d("VeilRenderer", "✓ Compress: $newValue")
+                    android.util.Log.d("VeilRenderer", "✓ Vertical Scale: $clampedInput -> $filterValue")
+                }
+                
+                text.contains("compress", ignoreCase = true) -> {
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 10  // Default to 10
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to 0.1-3.0, then apply as negative delta
+                    val targetValue = 0.1f + (clampedInput / 100.0f) * 2.9f
+                    val current = renderer?.getVerticalScale() ?: 1.0f
+                    val newValue = (current - (current - targetValue) * 0.1f).coerceIn(0.1f, 3.0f)
+                    renderer?.setVerticalScale(newValue)
+                    val displayValue = ((newValue - 0.1f) / 2.9f * 100f).toInt().coerceIn(0, 100)
+                    showOverlay("VERTICAL SCALE: $displayValue\nRange: 0 - 100\n(compress = shorter)")
+                    playChime()
+                    android.util.Log.d("VeilRenderer", "✓ Compress: $clampedInput -> $newValue")
                 }
                 
                 text.contains("stretch", ignoreCase = true) -> {
-                    val numbers = words.mapNotNull { it.toFloatOrNull() }
-                    val delta = (numbers.lastOrNull() ?: 0.1f) / 10.0f  // Positive delta = stretch
+                    val numbers = words.mapNotNull { it.toIntOrNull() }
+                    val inputValue = numbers.lastOrNull() ?: 10  // Default to 10
+                    val clampedInput = inputValue.coerceIn(0, 100)
+                    // Convert 0-100 to 0.1-3.0, then apply as positive delta
+                    val targetValue = 0.1f + (clampedInput / 100.0f) * 2.9f
                     val current = renderer?.getVerticalScale() ?: 1.0f
-                    val newValue = (current + delta).coerceIn(0.1f, 3.0f)
+                    val newValue = (current + (targetValue - current) * 0.1f).coerceIn(0.1f, 3.0f)
                     renderer?.setVerticalScale(newValue)
-                    showOverlay("VERTICAL SCALE: ${String.format("%.2f", newValue)}\nRange: 0.1 - 3.0\n(compress = shorter, stretch = taller)")
+                    val displayValue = ((newValue - 0.1f) / 2.9f * 100f).toInt().coerceIn(0, 100)
+                    showOverlay("VERTICAL SCALE: $displayValue\nRange: 0 - 100\n(stretch = taller)")
                     playChime()
-                    android.util.Log.d("VeilRenderer", "✓ Stretch: $newValue")
+                    android.util.Log.d("VeilRenderer", "✓ Stretch: $clampedInput -> $newValue")
                 }
                 
                 // Reset filters and scaling (but NOT eye position or resolution)
                 text.contains("reset", ignoreCase = true) -> {
-                    renderer?.setSharpness(0.5f)
-                    renderer?.setContrast(1.0f)
-                    renderer?.setBrightness(0.0f)
-                    renderer?.setSaturation(1.0f)
-                    renderer?.setVerticalScale(1.0f)
-                    showOverlay("RESET:\nSharpness: 0.50\nContrast: 1.00\nBrightness: 0.00\nSaturation: 1.00\nVertical Scale: 1.00")
+                    renderer?.setSharpness(0.5f)  // 50 in 0-100 scale
+                    renderer?.setContrast(1.0f)   // 50 in 0-100 scale
+                    renderer?.setBrightness(0.0f) // 50 in 0-100 scale
+                    renderer?.setSaturation(1.0f) // 50 in 0-100 scale
+                    renderer?.setVerticalScale(1.0f) // ~34 in 0-100 scale
+                    showOverlay("RESET:\nSharpness: 50\nContrast: 50\nBrightness: 50\nSaturation: 50\nVertical Scale: 34")
                     playChime()
                     android.util.Log.d("VeilRenderer", "✓ Reset filters and scaling")
                 }
