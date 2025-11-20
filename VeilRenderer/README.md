@@ -6,7 +6,8 @@ An Android application for rendering stereoscopic video from UVC (USB Video Clas
 
 - **Stereoscopic Video Rendering**: Splits dual-camera video feed into left/right eye views for 3D display
 - **UVC Camera Support**: Compatible with USB Video Class cameras (tested with ELP 3D-1080p V85)
-- **Voice Command Control**: Hands-free adjustment of eye offsets and convergence factor
+- **Voice Command Control**: Hands-free adjustment of eye offsets, convergence, and lens coefficients
+- **Lens Distortion Correction**: Post-process radial warp with Quest 2 defaults and live tuning
 - **High-Performance Rendering**: OpenGL ES 3.0 with support for 120Hz displays
 - **Fullscreen Immersive Mode**: Optimized for head-mounted display usage
 - **Persistent Configuration**: Saves calibration settings between sessions
@@ -95,6 +96,25 @@ The app supports continuous voice recognition for hands-free calibration:
    - Fine-tune right eye: `"right out 15"`
 4. Settings are automatically saved and restored on next launch
 
+### Lens Distortion Calibration
+
+The distortion pass uses a radial model `p' = p * (1 + k1*r^2 + k2*r^4 + k3*r^6)` with default Quest 2-friendly values:
+
+- `k1 = -0.34`
+- `k2 = 0.12`
+- `k3 = -0.02`
+- Lens centers start at `(0.5, 0.5)` per eye (normalized eye UV)
+
+You can live-adjust the coefficients via voice commands while wearing the headset:
+
+- `"lens k1 -0.36"`
+- `"lens k2 0.08"`
+- `"lens k3 -0.015"`
+
+Each command updates the specified coefficient, displays the new value, and persists it to `SharedPreferences`. Iterate on-device until lines look straight through your optics, then note the values for future builds.
+
+If you need to reset coefficients, clear the app data or delete the `lensK*` keys inside `VeilRendererConfig.xml` (device path: `/data/data/com.veil.renderer/shared_prefs/`).
+
 ## Project Structure
 
 ```
@@ -107,7 +127,9 @@ VeilRenderer/
 │   │       ├── assets/
 │   │       │   └── shaders/       # OpenGL shader files
 │   │       │       ├── passthrough.vert
-│   │       │       └── passthrough.frag
+│   │       │       ├── passthrough.frag
+│   │       │       ├── distort.vert
+│   │       │       └── distort.frag
 │   │       ├── java/com/veil/renderer/
 │   │       │   └── MainActivity.kt # Main application logic
 │   │       └── res/
