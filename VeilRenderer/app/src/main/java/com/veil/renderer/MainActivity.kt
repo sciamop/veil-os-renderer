@@ -7,12 +7,15 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.graphics.ImageFormat
+import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.camera2.*
+import android.media.ImageReader
 import android.opengl.GLES11Ext
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
@@ -28,6 +31,10 @@ import android.util.Log
 import android.view.Surface
 import android.view.View
 import android.view.WindowManager
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetector
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -35,6 +42,8 @@ import java.util.Locale
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
@@ -45,6 +54,29 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
     private var captureSession: CameraCaptureSession? = null
     private var surfaceTexture: SurfaceTexture? = null
     private var textureId: Int = 0
+
+    // AI / Face Detection State
+    private var imageReader: ImageReader? = null
+    private lateinit var faceDetector: FaceDetector
+    @Volatile private var isProcessingFace = false
+    private var faceRectGL = floatArrayOf(0f, 0f, 0f, 0f)
+    private var faceDetected = false
+    private var faceLostTimer = 0
+
+    // Snapshot State
+    private var mSnapshotTextureId = 0
+    private var mSnapshotProgram = 0
+    private var mSnapshotPositionHandle = 0
+    private var mSnapshotTexCoordHandle = 0
+    private var mSnapshotMVPHandle = 0
+    private var mSnapshotAlphaHandle = 0
+    private var mSnapshotSamplerHandle = 0
+
+    private var snapshotTimer = 0
+    private val SNAPSHOT_HOLD_FRAMES = 20 // ~300ms at 60fps
+    private val SNAPSHOT_FADE_FRAMES = 30 // ~500ms fade
+    private var snapshotMVP = FloatArray(16) // Frozen position for the snapshot
+    private var requestSnapshot = false
 
     // Sensor & ATW State
     private lateinit var sensorManager: SensorManager
@@ -70,13 +102,15 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
     private val mViewMatrix = FloatArray(16)
     private val mTempMatrix = FloatArray(16)
 
+    // Temp matrix for Face Box rendering
+    private val mFaceMVP = FloatArray(16)
+
     // GL Handles
     private var mProgram = 0
     private var maPositionHandle = 0
     private var maTextureHandle = 0
     private var muMVPMatrixHandle = 0
     private var muSTMatrixHandle = 0
-    // Distortion Uniforms
     private var muLensCenterHandle = 0
     private var muDistortionKHandle = 0
     private var muCalibrationScaleHandle = 0
@@ -87,26 +121,31 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
     private var mFeedbackColorHandle = 0
     private var mFeedbackMVPHandle = 0
     private var feedbackTimer = 0
-    private val FEEDBACK_DURATION = 60 // Frames (approx 1 sec)
+    private val FEEDBACK_DURATION = 60
 
     // Buffers
     private lateinit var vertexBuffer: FloatBuffer
     private lateinit var feedbackVertexBuffer: FloatBuffer
+    private lateinit var faceBoxVertexBuffer: FloatBuffer
 
-    // Geometry (Full Screen Quad)
+    // Geometry
     private val squareCoords = floatArrayOf(
         -1.0f, -1.0f, 0.0f,
         1.0f, -1.0f, 0.0f,
         -1.0f,  1.0f, 0.0f,
         1.0f,  1.0f, 0.0f
     )
-
-    // Feedback Geometry (Small center quad)
     private val feedbackCoords = floatArrayOf(
         -0.05f, -0.05f, 0.0f,
         0.05f, -0.05f, 0.0f,
         -0.05f,  0.05f, 0.0f,
         0.05f,  0.05f, 0.0f
+    )
+    private val faceBoxCoords = floatArrayOf(
+        0.0f, 0.0f, 0.0f,  // BL
+        1.0f, 0.0f, 0.0f,  // BR
+        0.0f, 1.0f, 0.0f,  // TL
+        1.0f, 1.0f, 0.0f   // TR
     )
 
     private val PERMISSION_REQUEST_CODE = 101
@@ -120,8 +159,8 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         var leftEyeY: Float = 0f,
         var rightEyeX: Float = 0f,
         var rightEyeY: Float = 0f,
-        var zoomPercent: Float = 0f, // 0 = 100% scale
-        var barrelK: Float = 0f,     // Distortion coefficient
+        var zoomPercent: Float = 0f,
+        var barrelK: Float = 0f,
         var latencyBiasNs: Long = 20_000_000L
     )
     private var cal = CalibrationData()
@@ -141,18 +180,23 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
                 or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
 
-        // Preferences
         prefs = getSharedPreferences("VRCalibration", Context.MODE_PRIVATE)
         loadCalibration()
 
-        // GL Setup
+        val options = FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE) // TPU Heavy Lifting
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+            .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
+            .build()
+        faceDetector = FaceDetection.getClient(options)
+
         glSurfaceView = GLSurfaceView(this)
         glSurfaceView.setEGLContextClientVersion(3)
         glSurfaceView.setRenderer(this)
         glSurfaceView.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
         setContentView(glSurfaceView)
 
-        // Hardware Managers
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
@@ -165,40 +209,23 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         sensorThread.start()
         sensorHandler = Handler(sensorThread.looper)
 
-        // Permissions & Speech Init
         checkAndRequestPermissions()
     }
 
     private fun checkAndRequestPermissions() {
         val permissions = mutableListOf<String>()
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(Manifest.permission.CAMERA)
-        }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(Manifest.permission.RECORD_AUDIO)
-        }
-
-        if (permissions.isNotEmpty()) {
-            requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
-        } else {
-            initSpeechRecognition()
-        }
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.CAMERA)
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) permissions.add(Manifest.permission.RECORD_AUDIO)
+        if (permissions.isNotEmpty()) requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
+        else initSpeechRecognition()
     }
 
     override fun onResume() {
         super.onResume()
         glSurfaceView.onResume()
-        rotationVectorSensor?.also { sensor ->
-            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME, sensorHandler)
-        }
-        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            if (surfaceTexture != null) openCamera()
-        }
-
-        // Restart listening if we were listening
-        if (::speechRecognizer.isInitialized) {
-            startListening()
-        }
+        rotationVectorSensor?.also { sensor -> sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME, sensorHandler) }
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED && surfaceTexture != null) openCamera()
+        if (::speechRecognizer.isInitialized) startListening()
     }
 
     override fun onPause() {
@@ -206,31 +233,21 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         glSurfaceView.onPause()
         sensorManager.unregisterListener(this)
         closeCamera()
-        if (::speechRecognizer.isInitialized) {
-            speechRecognizer.stopListening()
-        }
+        if (::speechRecognizer.isInitialized) speechRecognizer.stopListening()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            // Re-check individually
-            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                if (surfaceTexture != null) openCamera()
-            }
-            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                initSpeechRecognition()
-            }
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED && surfaceTexture != null) openCamera()
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) initSpeechRecognition()
         }
     }
-
-    // --- Speech Recognition Logic ---
 
     private fun initSpeechRecognition() {
         mainHandler.post {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toString())
             }
@@ -240,147 +257,87 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
-                override fun onError(error: Int) {
-                    // Silently restart on error
-                    restartListening()
-                }
+                override fun onError(error: Int) { restartListening() }
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        processCommand(matches[0].uppercase())
-                    }
+                    if (!matches.isNullOrEmpty()) processCommand(matches[0].uppercase())
                     restartListening()
                 }
-                override fun onPartialResults(partialResults: Bundle?) {
-                }
+                override fun onPartialResults(partialResults: Bundle?) {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             })
             startListening()
         }
     }
 
-    private fun startListening() {
-        try {
-            speechRecognizer.startListening(recognizerIntent)
-        } catch (e: Exception) { e.printStackTrace() }
-    }
-
-    private fun restartListening() {
-        mainHandler.postDelayed({ startListening() }, 100)
-    }
+    private fun startListening() { try { speechRecognizer.startListening(recognizerIntent) } catch (e: Exception) {} }
+    private fun restartListening() { mainHandler.postDelayed({ startListening() }, 100) }
 
     private fun processCommand(cmd: String) {
         var commandRecognized = false
-
-        if (cmd.contains("CALIBRATE")) {
-            cal.isCalibrating = true
-            commandRecognized = true
-        } else if (cmd.contains("SAVE")) {
-            cal.isCalibrating = false
-            saveCalibration()
-            commandRecognized = true
-        }
+        if (cmd.contains("CALIBRATE")) { cal.isCalibrating = true; commandRecognized = true }
+        else if (cmd.contains("SAVE")) { cal.isCalibrating = false; saveCalibration(); commandRecognized = true }
 
         if (cal.isCalibrating) {
-            // Parsing logic
             val words = cmd.split(" ")
-            val valIdx = words.size - 1
-            val valueStr = words[valIdx].filter { it.isDigit() }
-            val value = valueStr.toFloatOrNull() ?: 0f
-
-            // FIXED: Multiplier was too small.
-            // 100 pixels on ~1200px eye width is approx 0.15 NDC.
-            // value / 500f makes "100" -> 0.2 (visible shift).
+            val value = words.lastOrNull()?.filter { it.isDigit() }?.toFloatOrNull() ?: 0f
             val multiplier = value / 500f
 
             if (cmd.contains("RESET")) {
-                if (cmd.contains("WARP")) cal.latencyBiasNs = 20_000_000L
+                if (cmd.contains("TIMEWARP")) cal.latencyBiasNs = 20_000_000L
                 else if (cmd.contains("ZOOM")) cal.zoomPercent = 0f
                 else if (cmd.contains("BARREL")) cal.barrelK = 0f
                 else if (cmd.contains("LEFT")) { cal.leftEyeX = 0f; cal.leftEyeY = 0f }
                 else if (cmd.contains("RIGHT")) { cal.rightEyeX = 0f; cal.rightEyeY = 0f }
                 commandRecognized = true
             } else {
-                if (cmd.contains("WARP")) {
-                    // 10% change = 2ms
-                    val change = if (cmd.contains("FASTER")) -2_000_000L else 2_000_000L
-                    cal.latencyBiasNs += change
+                if (cmd.contains("TIMEWARP")) {
+                    cal.latencyBiasNs += if (cmd.contains("FASTER")) -2_000_000L else 2_000_000L
                     commandRecognized = true
                 } else if (cmd.contains("ZOOM")) {
-                    val change = if (cmd.contains("OUT")) -value else value
-                    cal.zoomPercent += change
+                    cal.zoomPercent += if (cmd.contains("OUT")) -value else value
                     commandRecognized = true
                 } else if (cmd.contains("BARREL")) {
-                    // 0.01 step per 10 value
-                    val change = (if (cmd.contains("DOWN")) -value else value) * 0.001f
-                    cal.barrelK += change
+                    cal.barrelK += (if (cmd.contains("DOWN")) -value else value) * 0.001f
                     commandRecognized = true
                 } else if (cmd.contains("LEFT") || cmd.contains("RIGHT")) {
                     val isLeft = cmd.contains("LEFT")
-                    // In/Out logic (IPD)
-                    var dx = 0f
-                    var dy = 0f
-
+                    var dx = 0f; var dy = 0f
                     if (cmd.contains("IN")) dx = if (isLeft) multiplier else -multiplier
                     else if (cmd.contains("OUT")) dx = if (isLeft) -multiplier else multiplier
-
-                    if (cmd.contains("UP")) dy = multiplier
-                    else if (cmd.contains("DOWN")) dy = -multiplier
-
-                    if (isLeft) {
-                        cal.leftEyeX += dx
-                        cal.leftEyeY += dy
-                    } else {
-                        cal.rightEyeX += dx
-                        cal.rightEyeY += dy
-                    }
+                    if (cmd.contains("UP")) dy = multiplier else if (cmd.contains("DOWN")) dy = -multiplier
+                    if (isLeft) { cal.leftEyeX += dx; cal.leftEyeY += dy }
+                    else { cal.rightEyeX += dx; cal.rightEyeY += dy }
                     commandRecognized = true
                 }
             }
         }
-
-        if (commandRecognized) {
-            feedbackTimer = FEEDBACK_DURATION
-        }
+        if (commandRecognized) feedbackTimer = FEEDBACK_DURATION
     }
 
     private fun saveCalibration() {
         prefs.edit().apply {
-            putFloat("lx", cal.leftEyeX)
-            putFloat("ly", cal.leftEyeY)
-            putFloat("rx", cal.rightEyeX)
-            putFloat("ry", cal.rightEyeY)
-            putFloat("zoom", cal.zoomPercent)
-            putFloat("barrel", cal.barrelK)
-            putLong("bias", cal.latencyBiasNs)
-            apply()
+            putFloat("lx", cal.leftEyeX); putFloat("ly", cal.leftEyeY)
+            putFloat("rx", cal.rightEyeX); putFloat("ry", cal.rightEyeY)
+            putFloat("zoom", cal.zoomPercent); putFloat("barrel", cal.barrelK)
+            putLong("bias", cal.latencyBiasNs); apply()
         }
     }
 
     private fun loadCalibration() {
-        cal.leftEyeX = prefs.getFloat("lx", 0f)
-        cal.leftEyeY = prefs.getFloat("ly", 0f)
-        cal.rightEyeX = prefs.getFloat("rx", 0f)
-        cal.rightEyeY = prefs.getFloat("ry", 0f)
-        cal.zoomPercent = prefs.getFloat("zoom", 0f)
-        cal.barrelK = prefs.getFloat("barrel", 0f)
+        cal.leftEyeX = prefs.getFloat("lx", 0f); cal.leftEyeY = prefs.getFloat("ly", 0f)
+        cal.rightEyeX = prefs.getFloat("rx", 0f); cal.rightEyeY = prefs.getFloat("ry", 0f)
+        cal.zoomPercent = prefs.getFloat("zoom", 0f); cal.barrelK = prefs.getFloat("barrel", 0f)
         cal.latencyBiasNs = prefs.getLong("bias", 20_000_000L)
     }
 
-    // --- GL Renderer ---
-
     private fun initBuffers() {
-        val bb = ByteBuffer.allocateDirect(squareCoords.size * 4)
-        bb.order(ByteOrder.nativeOrder())
-        vertexBuffer = bb.asFloatBuffer()
-        vertexBuffer.put(squareCoords)
-        vertexBuffer.position(0)
-
-        val fbb = ByteBuffer.allocateDirect(feedbackCoords.size * 4)
-        fbb.order(ByteOrder.nativeOrder())
-        feedbackVertexBuffer = fbb.asFloatBuffer()
-        feedbackVertexBuffer.put(feedbackCoords)
-        feedbackVertexBuffer.position(0)
+        val bb = ByteBuffer.allocateDirect(squareCoords.size * 4).order(ByteOrder.nativeOrder())
+        vertexBuffer = bb.asFloatBuffer().put(squareCoords); vertexBuffer.position(0)
+        val fbb = ByteBuffer.allocateDirect(feedbackCoords.size * 4).order(ByteOrder.nativeOrder())
+        feedbackVertexBuffer = fbb.asFloatBuffer().put(feedbackCoords); feedbackVertexBuffer.position(0)
+        val fbBb = ByteBuffer.allocateDirect(faceBoxCoords.size * 4).order(ByteOrder.nativeOrder())
+        faceBoxVertexBuffer = fbBb.asFloatBuffer().put(faceBoxCoords); faceBoxVertexBuffer.position(0)
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -398,20 +355,29 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES30.glClearColor(0f, 0f, 0f, 1f)
-        val textures = IntArray(1)
-        GLES30.glGenTextures(1, textures, 0)
+        val textures = IntArray(2)
+        GLES30.glGenTextures(2, textures, 0)
+
+        // 1. Camera Texture (OES)
         textureId = textures[0]
         GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
         GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_NEAREST)
         GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_NEAREST)
-        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
-        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+
+        // 2. Snapshot Texture (2D)
+        mSnapshotTextureId = textures[1]
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mSnapshotTextureId)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        // Allocate empty 512x512 texture for snapshots
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, 512, 512, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
 
         surfaceTexture = SurfaceTexture(textureId)
         surfaceTexture!!.setOnFrameAvailableListener { glSurfaceView.requestRender() }
 
         mProgram = createProgram(VERTEX_SHADER_CODE, FRAGMENT_DISTORTION_CODE)
         mFeedbackProgram = createProgram(VERTEX_FEEDBACK_CODE, FRAGMENT_FEEDBACK_CODE)
+        mSnapshotProgram = createProgram(SNAPSHOT_VERTEX_CODE, SNAPSHOT_FRAGMENT_CODE)
 
         if (mProgram != 0) {
             maPositionHandle = GLES30.glGetAttribLocation(mProgram, "aPosition")
@@ -422,11 +388,17 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
             muDistortionKHandle = GLES30.glGetUniformLocation(mProgram, "uDistortionK")
             muCalibrationScaleHandle = GLES30.glGetUniformLocation(mProgram, "uCalibrationScale")
         }
-
         if (mFeedbackProgram != 0) {
             mFeedbackPositionHandle = GLES30.glGetAttribLocation(mFeedbackProgram, "aPosition")
             mFeedbackColorHandle = GLES30.glGetUniformLocation(mFeedbackProgram, "uColor")
             mFeedbackMVPHandle = GLES30.glGetUniformLocation(mFeedbackProgram, "uMVPMatrix")
+        }
+        if (mSnapshotProgram != 0) {
+            mSnapshotPositionHandle = GLES30.glGetAttribLocation(mSnapshotProgram, "aPosition")
+            mSnapshotTexCoordHandle = GLES30.glGetAttribLocation(mSnapshotProgram, "aTexCoord")
+            mSnapshotMVPHandle = GLES30.glGetUniformLocation(mSnapshotProgram, "uMVPMatrix")
+            mSnapshotSamplerHandle = GLES30.glGetUniformLocation(mSnapshotProgram, "sTexture")
+            mSnapshotAlphaHandle = GLES30.glGetUniformLocation(mSnapshotProgram, "uAlpha")
         }
 
         runOnUiThread { openCamera() }
@@ -436,9 +408,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
     override fun onDrawFrame(gl: GL10?) {
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
-
         if (surfaceTexture == null || textureId == 0) return
-
         try {
             surfaceTexture?.updateTexImage()
             surfaceTexture?.getTransformMatrix(mSTMatrix)
@@ -447,110 +417,169 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         val w = glSurfaceView.width
         val h = glSurfaceView.height
 
-        // --- 1. Texture Transform ---
+        // Matrix Setup
         Matrix.translateM(mSTMatrix, 0, 0.5f, 0.5f, 0f)
         Matrix.rotateM(mSTMatrix, 0, 270f, 0f, 0f, 1f)
-
-        val cameraAspect = 9.0f / 16.0f
-        val perEyeWidth = w / 2.0f
-        val viewportAspect = perEyeWidth / h.toFloat()
-        var scaleX = 1.0f
-        var scaleY = 1.0f
-
-        if (viewportAspect > cameraAspect) {
-            scaleY = 1.0f
-            scaleX = cameraAspect / viewportAspect
-        } else {
-            scaleX = 1.0f
-            scaleY = viewportAspect / cameraAspect
-        }
-
-        Matrix.scaleM(mSTMatrix, 0, scaleX, scaleY, 1.0f)
+        val camRatio = 9.0f / 16.0f; val viewRatio = (w/2f) / h.toFloat()
+        val sX = if (viewRatio > camRatio) cameraAspectToView(camRatio, viewRatio) else 1.0f
+        val sY = if (viewRatio > camRatio) 1.0f else viewRatio / camRatio
+        Matrix.scaleM(mSTMatrix, 0, sX, sY, 1.0f)
         Matrix.translateM(mSTMatrix, 0, -0.5f, -0.5f, 0f)
 
-        // --- 2. ATW ---
         val now = System.nanoTime()
-        val frameTime = surfaceTexture?.timestamp ?: 0L
-
         if (lastSensorTimestamp == 0L || abs(now - lastSensorTimestamp) > INERTIA_KILL_THRESHOLD_NS) {
             Matrix.setIdentityM(mViewMatrix, 0)
         } else {
-            // Use calibrated latency bias
-            val targetTime = frameTime + cal.latencyBiasNs
+            val target = (surfaceTexture?.timestamp ?: 0L) + cal.latencyBiasNs
             synchronized(rotationHistory) {
-                val matrixThen = findClosestMatrix(targetTime)
-                val matrixNow = rotationHistory[historyHead]
+                val mThen = findClosestMatrix(target); val mNow = rotationHistory[historyHead]
                 val nowInv = FloatArray(16)
-                if (Matrix.invertM(nowInv, 0, matrixNow, 0)) {
-                    Matrix.multiplyMM(mDeltaMatrix, 0, nowInv, 0, matrixThen, 0)
+                if (Matrix.invertM(nowInv, 0, mNow, 0)) {
+                    Matrix.multiplyMM(mDeltaMatrix, 0, nowInv, 0, mThen, 0)
                     System.arraycopy(mDeltaMatrix, 0, mViewMatrix, 0, 16)
-                } else {
-                    Matrix.setIdentityM(mViewMatrix, 0)
-                }
+                } else Matrix.setIdentityM(mViewMatrix, 0)
             }
         }
-
         Matrix.scaleM(mViewMatrix, 0, WARP_OVERFILL_SCALE, WARP_OVERFILL_SCALE, 1.0f)
+        val calScale = 1.0f + (cal.zoomPercent / 100.0f)
 
-        // --- 3. Render Eyes with Calibration ---
-
+        // --- Render Eyes ---
         GLES30.glUseProgram(mProgram)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
         GLES30.glUniform1i(maTextureHandle, 0)
         GLES30.glUniformMatrix4fv(muSTMatrixHandle, 1, false, mSTMatrix, 0)
-
-        // Calibration Scale (Global Zoom)
-        // cal.zoomPercent: 10 = 110% size.
-        val calScale = 1.0f + (cal.zoomPercent / 100.0f)
         GLES30.glUniform1f(muCalibrationScaleHandle, calScale)
-        // Distortion K
         GLES30.glUniform1f(muDistortionKHandle, cal.barrelK)
-
         GLES30.glEnableVertexAttribArray(maPositionHandle)
         GLES30.glVertexAttribPointer(maPositionHandle, 3, GLES30.GL_FLOAT, false, 12, vertexBuffer)
 
-        // LEFT EYE
+        // Left
         System.arraycopy(mViewMatrix, 0, mMVPMatrixLeft, 0, 16)
         Matrix.translateM(mMVPMatrixLeft, 0, cal.leftEyeX, cal.leftEyeY, 0f)
-
-        GLES30.glViewport(0, 0, w / 2, h)
+        GLES30.glViewport(0, 0, w/2, h)
         GLES30.glUniformMatrix4fv(muMVPMatrixHandle, 1, false, mMVPMatrixLeft, 0)
-        // Pass lens center relative to this viewport (usually 0.5, 0.5)
         GLES30.glUniform2f(muLensCenterHandle, 0.5f, 0.5f)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
 
-        // RIGHT EYE
+        // Right
         System.arraycopy(mViewMatrix, 0, mMVPMatrixRight, 0, 16)
         Matrix.translateM(mMVPMatrixRight, 0, cal.rightEyeX, cal.rightEyeY, 0f)
-
-        GLES30.glViewport(w / 2, 0, w / 2, h)
+        GLES30.glViewport(w/2, 0, w/2, h)
         GLES30.glUniformMatrix4fv(muMVPMatrixHandle, 1, false, mMVPMatrixRight, 0)
         GLES30.glUniform2f(muLensCenterHandle, 0.5f, 0.5f)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
 
-        GLES30.glDisableVertexAttribArray(maPositionHandle)
+        // --- Snapshot Capture Logic ---
+        if (requestSnapshot) {
+            requestSnapshot = false
+            snapshotTimer = SNAPSHOT_HOLD_FRAMES + SNAPSHOT_FADE_FRAMES
 
-        // --- 4. Render Visual Feedback ---
+            Matrix.setIdentityM(snapshotMVP, 0)
+            val glX = (faceRectGL[0] * 2) - 1
+            val glY = (faceRectGL[1] * 2) - 1
+            val fW = faceRectGL[2] - faceRectGL[0]
+            val fH = faceRectGL[3] - faceRectGL[1]
+            Matrix.translateM(snapshotMVP, 0, glX, glY, 0f)
+            Matrix.scaleM(snapshotMVP, 0, fW * 2, fH * 2, 1f)
+
+            val copyX = (faceRectGL[0] * (w/2)).toInt()
+            val copyY = (faceRectGL[1] * h).toInt()
+            val copyW = ((faceRectGL[2] - faceRectGL[0]) * (w/2)).toInt()
+            val copyH = ((faceRectGL[3] - faceRectGL[1]) * h).toInt()
+
+            if (copyW > 0 && copyH > 0) {
+                GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mSnapshotTextureId)
+                GLES30.glCopyTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, copyX, copyY, copyW, copyH, 0)
+            }
+        }
+
+        // --- Render Snapshot Overlay ---
+        if (snapshotTimer > 0) {
+            val alpha = if (snapshotTimer > SNAPSHOT_FADE_FRAMES) 1.0f else snapshotTimer.toFloat() / SNAPSHOT_FADE_FRAMES
+            drawSnapshot(w, h, alpha)
+            snapshotTimer--
+        }
+
+        // --- Render Face Box & Indicator ---
+        if (faceDetected) {
+            faceLostTimer = 15
+        } else if (faceLostTimer > 0) {
+            faceLostTimer--
+        }
+
+        if (faceLostTimer > 0) {
+            drawFaceBox(w, h)
+            drawFaceIndicator(w, h)
+        }
+
+        // --- Render Visual Feedback ---
         if (feedbackTimer > 0) {
             feedbackTimer--
             drawFeedback(w, h)
         }
+
+        GLES30.glDisableVertexAttribArray(maPositionHandle)
     }
 
-    private fun drawFeedback(w: Int, h: Int) {
+    private fun cameraAspectToView(cam: Float, view: Float): Float = cam / view
+
+    private fun drawSnapshot(w: Int, h: Int, alpha: Float) {
+        GLES30.glEnable(GLES30.GL_BLEND)
+        GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
+        GLES30.glUseProgram(mSnapshotProgram)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mSnapshotTextureId)
+        GLES30.glUniform1i(mSnapshotSamplerHandle, 0)
+        GLES30.glUniform1f(mSnapshotAlphaHandle, alpha)
+        GLES30.glEnableVertexAttribArray(mSnapshotPositionHandle)
+        GLES30.glVertexAttribPointer(mSnapshotPositionHandle, 3, GLES30.GL_FLOAT, false, 12, faceBoxVertexBuffer)
+        GLES30.glVertexAttribPointer(mSnapshotTexCoordHandle, 3, GLES30.GL_FLOAT, false, 12, faceBoxVertexBuffer)
+        GLES30.glEnableVertexAttribArray(mSnapshotTexCoordHandle)
+        GLES30.glViewport(0, 0, w/2, h)
+        GLES30.glUniformMatrix4fv(mSnapshotMVPHandle, 1, false, snapshotMVP, 0)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+        GLES30.glViewport(w/2, 0, w/2, h)
+        GLES30.glUniformMatrix4fv(mSnapshotMVPHandle, 1, false, snapshotMVP, 0)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+        GLES30.glDisableVertexAttribArray(mSnapshotPositionHandle)
+        GLES30.glDisableVertexAttribArray(mSnapshotTexCoordHandle)
+        GLES30.glDisable(GLES30.GL_BLEND)
+    }
+
+    private fun drawFaceBox(w: Int, h: Int) {
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
         GLES30.glUseProgram(mFeedbackProgram)
-
-        // FIXED: Draw specifically in center of Left Eye
+        GLES30.glEnableVertexAttribArray(mFeedbackPositionHandle)
+        GLES30.glVertexAttribPointer(mFeedbackPositionHandle, 3, GLES30.GL_FLOAT, false, 12, faceBoxVertexBuffer)
+        Matrix.setIdentityM(mFaceMVP, 0)
+        val glX = (faceRectGL[0] * 2) - 1
+        val glY = (faceRectGL[1] * 2) - 1
+        val fW = faceRectGL[2] - faceRectGL[0]
+        val fH = faceRectGL[3] - faceRectGL[1]
+        Matrix.translateM(mFaceMVP, 0, glX, glY, 0f)
+        Matrix.scaleM(mFaceMVP, 0, fW * 2, fH * 2, 1f)
         GLES30.glViewport(0, 0, w / 2, h)
-        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mIdentity, 0)
+        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVP, 0)
+        GLES30.glUniform4f(mFeedbackColorHandle, 1.0f, 0.0f, 0.0f, 0.5f)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+        GLES30.glViewport(w / 2, 0, w / 2, h)
+        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVP, 0)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+        GLES30.glDisableVertexAttribArray(mFeedbackPositionHandle)
+        GLES30.glDisable(GLES30.GL_BLEND)
+    }
 
-        // Fade out alpha
-        val alpha = feedbackTimer.toFloat() / FEEDBACK_DURATION.toFloat()
-        GLES30.glUniform4f(mFeedbackColorHandle, 0.0f, 1.0f, 0.0f, alpha)
-
+    private fun drawFaceIndicator(w: Int, h: Int) {
+        GLES30.glEnable(GLES30.GL_BLEND)
+        GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
+        GLES30.glUseProgram(mFeedbackProgram)
+        GLES30.glViewport(w / 2, 0, w / 2, h)
+        Matrix.setIdentityM(mFaceMVP, 0)
+        Matrix.translateM(mFaceMVP, 0, 0.7f, 0.7f, 0f)
+        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVP, 0)
+        GLES30.glUniform4f(mFeedbackColorHandle, 0.6f, 0.0f, 1.0f, 0.9f)
         GLES30.glEnableVertexAttribArray(mFeedbackPositionHandle)
         GLES30.glVertexAttribPointer(mFeedbackPositionHandle, 3, GLES30.GL_FLOAT, false, 12, feedbackVertexBuffer)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
@@ -558,7 +587,20 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glDisable(GLES30.GL_BLEND)
     }
 
-    // --- Helper Methods ---
+    private fun drawFeedback(w: Int, h: Int) {
+        GLES30.glEnable(GLES30.GL_BLEND)
+        GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
+        GLES30.glUseProgram(mFeedbackProgram)
+        GLES30.glViewport(0, 0, w / 2, h)
+        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mIdentity, 0)
+        val alpha = feedbackTimer.toFloat() / FEEDBACK_DURATION.toFloat()
+        GLES30.glUniform4f(mFeedbackColorHandle, 0.0f, 1.0f, 0.0f, alpha)
+        GLES30.glEnableVertexAttribArray(mFeedbackPositionHandle)
+        GLES30.glVertexAttribPointer(mFeedbackPositionHandle, 3, GLES30.GL_FLOAT, false, 12, feedbackVertexBuffer)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+        GLES30.glDisableVertexAttribArray(mFeedbackPositionHandle)
+        GLES30.glDisable(GLES30.GL_BLEND)
+    }
 
     private fun findClosestMatrix(targetNs: Long): FloatArray {
         var bestIdx = historyHead
@@ -568,19 +610,14 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
             val ts = timestampHistory[idx]
             if (ts == 0L) break
             val diff = abs(ts - targetNs)
-            if (diff < minDiff) {
-                minDiff = diff
-                bestIdx = idx
-            } else if (i > 5) break
+            if (diff < minDiff) { minDiff = diff; bestIdx = idx } else if (i > 5) break
         }
         val result = rotationHistory[bestIdx]
         return if (isValidMatrix(result)) result else mIdentity
     }
 
     private fun isValidMatrix(matrix: FloatArray): Boolean {
-        var sum = 0f
-        for (i in 0 until 16) sum += abs(matrix[i])
-        return sum > 0.1f
+        var sum = 0f; for (i in 0 until 16) sum += abs(matrix[i]); return sum > 0.1f
     }
 
     private fun openCamera() {
@@ -589,30 +626,54 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         try {
             val cameraId = cameraManager.cameraIdList[0]
             cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
-                override fun onOpened(camera: CameraDevice) {
-                    cameraDevice = camera
-                    startPreview()
-                }
+                override fun onOpened(camera: CameraDevice) { cameraDevice = camera; startPreview() }
                 override fun onDisconnected(camera: CameraDevice) { cameraDevice?.close(); cameraDevice = null }
                 override fun onError(camera: CameraDevice, error: Int) { cameraDevice?.close(); cameraDevice = null }
             }, null)
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { }
     }
 
     private fun startPreview() {
         try {
-            // CHANGE: Back to 1080p for maximum sharpness
-            surfaceTexture?.setDefaultBufferSize(1280, 720)
-
+            surfaceTexture?.setDefaultBufferSize(1920, 1080)
             val surface = Surface(surfaceTexture)
-            cameraDevice?.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+            imageReader = ImageReader.newInstance(640, 480, ImageFormat.YUV_420_888, 3)
+            imageReader?.setOnImageAvailableListener({ reader ->
+                val image = try { reader.acquireLatestImage() } catch (e: Exception) { null }
+                if (image != null) {
+                    if (!isProcessingFace && snapshotTimer == 0) {
+                        isProcessingFace = true
+                        val inputImage = InputImage.fromMediaImage(image, 270)
+                        faceDetector.process(inputImage)
+                            .addOnSuccessListener { faces ->
+                                if (faces.isNotEmpty()) {
+                                    val b = faces[0].boundingBox
+                                    val w = 480f; val h = 640f
+                                    val cx = b.centerX(); val cy = b.centerY()
+                                    val halfW = (b.width() / 2f) * 2.0f
+                                    val halfH = (b.height() / 2f) * 2.0f
+                                    faceRectGL[0] = max(0f, (cx - halfW) / w)
+                                    faceRectGL[1] = max(0f, 1.0f - ((cy + halfH) / h))
+                                    faceRectGL[2] = min(1f, (cx + halfW) / w)
+                                    faceRectGL[3] = min(1f, 1.0f - ((cy - halfH) / h))
+                                    if (!faceDetected) { faceDetected = true; requestSnapshot = true }
+                                } else { faceDetected = false }
+                                isProcessingFace = false; image.close()
+                            }
+                            .addOnFailureListener { isProcessingFace = false; image.close() }
+                    } else { image.close() }
+                }
+            }, sensorHandler)
+
+            val targets = listOf(surface, imageReader!!.surface)
+            cameraDevice?.createCaptureSession(targets, object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(session: CameraCaptureSession) {
                     if (cameraDevice == null) return
                     captureSession = session
                     try {
                         val builder = cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
                         builder?.addTarget(surface)
-                        // Still targeting 60fps for smoothness
+                        builder?.addTarget(imageReader!!.surface)
                         builder?.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, android.util.Range(60, 60))
                         builder?.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
                         session.setRepeatingRequest(builder!!.build(), null, null)
@@ -620,12 +681,12 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
                 }
                 override fun onConfigureFailed(session: CameraCaptureSession) {}
             }, null)
-        } catch (e: Exception) { e.printStackTrace() }
+        } catch (e: Exception) { }
     }
 
     private fun closeCamera() {
-        try { captureSession?.close(); cameraDevice?.close() } catch (e: Exception) { }
-        captureSession = null; cameraDevice = null
+        try { captureSession?.close(); cameraDevice?.close(); imageReader?.close() } catch (e: Exception) { }
+        captureSession = null; cameraDevice = null; imageReader = null
     }
 
     private fun createProgram(vertexSource: String, fragmentSource: String): Int {
@@ -647,10 +708,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glCompileShader(shader)
         val compileStatus = IntArray(1)
         GLES30.glGetShaderiv(shader, GLES30.GL_COMPILE_STATUS, compileStatus, 0)
-        if (compileStatus[0] == 0) {
-            GLES30.glDeleteShader(shader)
-            return 0
-        }
+        if (compileStatus[0] == 0) { GLES30.glDeleteShader(shader); return 0 }
         return shader
     }
 
@@ -666,9 +724,6 @@ void main() {
     vTexCoord = (uSTMatrix * texPos).xy;
 }
 """
-        // Barrel Distortion Shader
-        // K > 0: Barrel (Corrects Pincushion)
-        // K < 0: Pincushion (Corrects Barrel)
         private const val FRAGMENT_DISTORTION_CODE = """#version 300 es
 #extension GL_OES_EGL_image_external_essl3 : require
 precision mediump float;
@@ -678,23 +733,13 @@ uniform vec2 uLensCenter;
 uniform float uDistortionK;
 uniform float uCalibrationScale;
 out vec4 FragColor;
-
 void main() {
-    // 1. Center coordinates
     vec2 rVec = vTexCoord - uLensCenter;
-    
-    // 2. Apply Calibration Zoom (Scale inverse)
-    // If scale = 1.1, we divide vector by 1.1 to sample closer to center (zoom in)
     rVec = rVec / uCalibrationScale;
-    
-    // 3. Apply Distortion
     float r2 = dot(rVec, rVec);
-    // Simple K1 + K2 approximation (using just K1 for control simplicity)
-    float f = 1.0 + (uDistortionK * r2);
-    
+    // Brown-Conrady Model (K1 + K2)
+    float f = 1.0 + (uDistortionK * r2) + ((uDistortionK * 0.25) * (r2 * r2));
     vec2 distCoord = uLensCenter + (rVec * f);
-
-    // 4. Check bounds
     if (distCoord.x < 0.0 || distCoord.x > 1.0 || distCoord.y < 0.0 || distCoord.y > 1.0) {
         FragColor = vec4(0.0, 0.0, 0.0, 1.0);
     } else {
@@ -702,7 +747,6 @@ void main() {
     }
 }
 """
-        // Feedback Visuals
         private const val VERTEX_FEEDBACK_CODE = """#version 300 es
 uniform mat4 uMVPMatrix;
 in vec4 aPosition;
@@ -713,6 +757,27 @@ precision mediump float;
 uniform vec4 uColor;
 out vec4 FragColor;
 void main() { FragColor = uColor; }
+"""
+        private const val SNAPSHOT_VERTEX_CODE = """#version 300 es
+uniform mat4 uMVPMatrix;
+in vec4 aPosition;
+in vec2 aTexCoord;
+out vec2 vTexCoord;
+void main() {
+    gl_Position = uMVPMatrix * aPosition;
+    vTexCoord = vec2(aPosition.x, aPosition.y); 
+}
+"""
+        private const val SNAPSHOT_FRAGMENT_CODE = """#version 300 es
+precision mediump float;
+uniform sampler2D sTexture;
+uniform float uAlpha;
+in vec2 vTexCoord;
+out vec4 FragColor;
+void main() {
+    vec4 color = texture(sTexture, vTexCoord);
+    FragColor = vec4(color.rgb, color.a * uAlpha);
+}
 """
     }
 }

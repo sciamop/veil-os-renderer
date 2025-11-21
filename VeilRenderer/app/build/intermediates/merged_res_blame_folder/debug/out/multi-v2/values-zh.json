@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.veil.renderer.app-mergeDebugResources-31:/values-zh/values-zh.xml",
+            "outputFile": "com.veil.renderer.app-mergeDebugResources-33:/values-zh/values-zh.xml",
             "map": [
                 {
                     "source": "/Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/res/values-zh/values-zh.xml",

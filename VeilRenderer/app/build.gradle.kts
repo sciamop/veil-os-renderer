@@ -48,5 +48,8 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+
+    // facial recognition stuff
+    implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
 }
 
