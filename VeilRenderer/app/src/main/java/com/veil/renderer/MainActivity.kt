@@ -294,14 +294,14 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
             val multiplier = value / 500f
 
             if (cmd.contains("RESET")) {
-                if (cmd.contains("TIMEWARP")) cal.latencyBiasNs = 20_000_000L
+                if (cmd.contains("WARP")) cal.latencyBiasNs = 20_000_000L
                 else if (cmd.contains("ZOOM")) cal.zoomPercent = 0f
                 else if (cmd.contains("BARREL")) cal.barrelK = 0f
                 else if (cmd.contains("LEFT")) { cal.leftEyeX = 0f; cal.leftEyeY = 0f }
                 else if (cmd.contains("RIGHT")) { cal.rightEyeX = 0f; cal.rightEyeY = 0f }
                 commandRecognized = true
             } else {
-                if (cmd.contains("TIMEWARP")) {
+                if (cmd.contains("WARP")) {
                     // 10% change = 2ms
                     val change = if (cmd.contains("FASTER")) -2_000_000L else 2_000_000L
                     cal.latencyBiasNs += change
@@ -601,7 +601,9 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
     private fun startPreview() {
         try {
-            surfaceTexture?.setDefaultBufferSize(1920, 1080)
+            // CHANGE: Back to 1080p for maximum sharpness
+            surfaceTexture?.setDefaultBufferSize(1280, 720)
+
             val surface = Surface(surfaceTexture)
             cameraDevice?.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(session: CameraCaptureSession) {
@@ -610,6 +612,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
                     try {
                         val builder = cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
                         builder?.addTarget(surface)
+                        // Still targeting 60fps for smoothness
                         builder?.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, android.util.Range(60, 60))
                         builder?.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
                         session.setRepeatingRequest(builder!!.build(), null, null)
