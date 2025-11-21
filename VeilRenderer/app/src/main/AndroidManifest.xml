@@ -5,9 +5,9 @@
     <uses-permission android:name="android.permission.USB_PERMISSION" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
+    <uses-feature android:name="android.hardware.sensor.gyroscope" />
     <uses-feature android:name="android.hardware.usb.host" android:required="true" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
 
     <application

@@ -1,8 +1,8 @@
-#Thu Nov 20 11:41:31 EST 2025
-base.0=C\:\\Users\\sciam\\Documents\\_projects\\[FALL2025] Thesis\\concept\\veil-visor\\veil-os-renderer\\VeilRenderer\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes.dex
-base.1=C\:\\Users\\sciam\\Documents\\_projects\\[FALL2025] Thesis\\concept\\veil-visor\\veil-os-renderer\\VeilRenderer\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex
-base.2=C\:\\Users\\sciam\\Documents\\_projects\\[FALL2025] Thesis\\concept\\veil-visor\\veil-os-renderer\\VeilRenderer\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\1\\classes.dex
-base.3=C\:\\Users\\sciam\\Documents\\_projects\\[FALL2025] Thesis\\concept\\veil-visor\\veil-os-renderer\\VeilRenderer\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes2.dex
+#Fri Nov 21 14:56:29 EST 2025
+base.0=/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex
+base.1=/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/build/intermediates/dex/debug/mergeProjectDexDebug/0/classes.dex
+base.2=/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/build/intermediates/dex/debug/mergeProjectDexDebug/1/classes.dex
+base.3=/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/build/intermediates/dex/debug/mergeExtDexDebug/classes2.dex
 path.0=classes.dex
 path.1=0/classes.dex
 path.2=1/classes.dex
