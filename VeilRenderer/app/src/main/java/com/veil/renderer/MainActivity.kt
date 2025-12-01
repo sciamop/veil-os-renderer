@@ -73,9 +73,9 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
     private var mSnapshotSamplerHandle = 0
 
     private var snapshotTimer = 0
-    private val SNAPSHOT_HOLD_FRAMES = 20 // ~300ms at 60fps
-    private val SNAPSHOT_FADE_FRAMES = 30 // ~500ms fade
-    private var snapshotMVP = FloatArray(16) // Frozen position for the snapshot
+    private val SNAPSHOT_HOLD_FRAMES = 30 // 0.5s hold
+    private val SNAPSHOT_FADE_FRAMES = 20 // 0.3s fade
+    private var snapshotMVP = FloatArray(16)
     private var requestSnapshot = false
 
     // Sensor & ATW State
@@ -102,8 +102,10 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
     private val mViewMatrix = FloatArray(16)
     private val mTempMatrix = FloatArray(16)
 
-    // Temp matrix for Face Box rendering
+    // Temp matrices for Face Box rendering
     private val mFaceMVP = FloatArray(16)
+    private val mFaceMVPLeft = FloatArray(16)
+    private val mFaceMVPRight = FloatArray(16)
 
     // GL Handles
     private var mProgram = 0
@@ -184,7 +186,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         loadCalibration()
 
         val options = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE) // TPU Heavy Lifting
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
             .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
@@ -483,6 +485,9 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
             Matrix.translateM(snapshotMVP, 0, glX, glY, 0f)
             Matrix.scaleM(snapshotMVP, 0, fW * 2, fH * 2, 1f)
 
+            // Calculate pixel coords for copy. Note: GL starts 0 at bottom.
+            // faceRectGL[1] is top-based from AI? No, we flipped it: 1.0 - (top/h).
+            // So faceRectGL[1] is bottom.
             val copyX = (faceRectGL[0] * (w/2)).toInt()
             val copyY = (faceRectGL[1] * h).toInt()
             val copyW = ((faceRectGL[2] - faceRectGL[0]) * (w/2)).toInt()
@@ -490,6 +495,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
             if (copyW > 0 && copyH > 0) {
                 GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mSnapshotTextureId)
+                // Use copy from framebuffer
                 GLES30.glCopyTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, copyX, copyY, copyW, copyH, 0)
             }
         }
@@ -553,20 +559,79 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glUseProgram(mFeedbackProgram)
         GLES30.glEnableVertexAttribArray(mFeedbackPositionHandle)
         GLES30.glVertexAttribPointer(mFeedbackPositionHandle, 3, GLES30.GL_FLOAT, false, 12, faceBoxVertexBuffer)
+        
+        // Calculate the same camera frame transformations as applied in onDrawFrame()
+        val camRatio = 9.0f / 16.0f
+        val viewRatio = (w/2f) / h.toFloat()
+        val sX = if (viewRatio > camRatio) cameraAspectToView(camRatio, viewRatio) else 1.0f
+        val sY = if (viewRatio > camRatio) 1.0f else viewRatio / camRatio
+        
+        // Transform faceRectGL coordinates through the same rotation/scaling pipeline as camera feed
+        // faceRectGL: [left, bottom, right, top] in normalized 0-1 space from ImageReader
+        // The camera feed applies: translate to center, rotate 270°, scale by sX/sY, translate back
+        // For 270° rotation: (x, y) -> (1-y, x) after translating to center
+        val faceLeft = faceRectGL[0]
+        val faceBottom = faceRectGL[1]
+        val faceRight = faceRectGL[2]
+        val faceTop = faceRectGL[3]
+        
+        // Transform each corner: translate to center, rotate 270°, scale, translate back
+        fun transformPoint(x: Float, y: Float): Pair<Float, Float> {
+            // Translate to center
+            var tx = x - 0.5f
+            var ty = y - 0.5f
+            // Rotate 270°: (x, y) -> (y, -x)
+            val rx = ty
+            val ry = -tx
+            // Scale
+            val sx = rx * sX
+            val sy = ry * sY
+            // Translate back
+            return Pair(sx + 0.5f, sy + 0.5f)
+        }
+        
+        val (blX, blY) = transformPoint(faceLeft, faceBottom)
+        val (brX, brY) = transformPoint(faceRight, faceBottom)
+        val (tlX, tlY) = transformPoint(faceLeft, faceTop)
+        val (trX, trY) = transformPoint(faceRight, faceTop)
+        
+        // Find bounding box of transformed corners
+        val minX = minOf(blX, brX, tlX, trX)
+        val maxX = maxOf(blX, brX, tlX, trX)
+        val minY = minOf(blY, brY, tlY, trY)
+        val maxY = maxOf(blY, brY, tlY, trY)
+        
+        // Convert to GL coordinates (-1 to 1) and calculate center/size
+        val centerX = (minX + maxX) / 2f
+        val centerY = (minY + maxY) / 2f
+        val fW = maxX - minX
+        val fH = maxY - minY
+        
+        // Create base MVP matrix for face box (in GL coordinate space)
         Matrix.setIdentityM(mFaceMVP, 0)
-        val glX = (faceRectGL[0] * 2) - 1
-        val glY = (faceRectGL[1] * 2) - 1
-        val fW = faceRectGL[2] - faceRectGL[0]
-        val fH = faceRectGL[3] - faceRectGL[1]
-        Matrix.translateM(mFaceMVP, 0, glX, glY, 0f)
-        Matrix.scaleM(mFaceMVP, 0, fW * 2, fH * 2, 1f)
+        Matrix.translateM(mFaceMVP, 0, centerX * 2f - 1f, centerY * 2f - 1f, 0f)
+        Matrix.scaleM(mFaceMVP, 0, fW * 2f, fH * 2f, 1f)
+        
+        // Left eye: apply leftEyeX/Y offsets independently
+        System.arraycopy(mFaceMVP, 0, mFaceMVPLeft, 0, 16)
+        Matrix.translateM(mFaceMVPLeft, 0, cal.leftEyeX, cal.leftEyeY, 0f)
+        
+        // Right eye: apply rightEyeX/Y offsets independently
+        System.arraycopy(mFaceMVP, 0, mFaceMVPRight, 0, 16)
+        Matrix.translateM(mFaceMVPRight, 0, cal.rightEyeX, cal.rightEyeY, 0f)
+        
+        // Draw left eye face box
         GLES30.glViewport(0, 0, w / 2, h)
-        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVP, 0)
+        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVPLeft, 0)
         GLES30.glUniform4f(mFeedbackColorHandle, 1.0f, 0.0f, 0.0f, 0.5f)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+        
+        // Draw right eye face box
         GLES30.glViewport(w / 2, 0, w / 2, h)
-        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVP, 0)
+        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVPRight, 0)
+        GLES30.glUniform4f(mFeedbackColorHandle, 1.0f, 0.0f, 0.0f, 0.5f)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+        
         GLES30.glDisableVertexAttribArray(mFeedbackPositionHandle)
         GLES30.glDisable(GLES30.GL_BLEND)
     }
@@ -637,28 +702,43 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         try {
             surfaceTexture?.setDefaultBufferSize(1920, 1080)
             val surface = Surface(surfaceTexture)
+            // FIX: Max images 3, volatile processing flag, try-catch acquire
             imageReader = ImageReader.newInstance(640, 480, ImageFormat.YUV_420_888, 3)
             imageReader?.setOnImageAvailableListener({ reader ->
-                val image = try { reader.acquireLatestImage() } catch (e: Exception) { null }
+                val image = try {
+                    reader.acquireLatestImage()
+                } catch (e: Exception) {
+                    null
+                }
                 if (image != null) {
                     if (!isProcessingFace && snapshotTimer == 0) {
                         isProcessingFace = true
-                        val inputImage = InputImage.fromMediaImage(image, 270)
+                        // FIX: Rotation 0
+                        val inputImage = InputImage.fromMediaImage(image, 0)
                         faceDetector.process(inputImage)
                             .addOnSuccessListener { faces ->
                                 if (faces.isNotEmpty()) {
                                     val b = faces[0].boundingBox
                                     val w = 480f; val h = 640f
+
                                     val cx = b.centerX(); val cy = b.centerY()
                                     val halfW = (b.width() / 2f) * 2.0f
                                     val halfH = (b.height() / 2f) * 2.0f
+
                                     faceRectGL[0] = max(0f, (cx - halfW) / w)
                                     faceRectGL[1] = max(0f, 1.0f - ((cy + halfH) / h))
                                     faceRectGL[2] = min(1f, (cx + halfW) / w)
                                     faceRectGL[3] = min(1f, 1.0f - ((cy - halfH) / h))
-                                    if (!faceDetected) { faceDetected = true; requestSnapshot = true }
-                                } else { faceDetected = false }
-                                isProcessingFace = false; image.close()
+
+                                    if (!faceDetected) {
+                                        faceDetected = true
+                                        requestSnapshot = true
+                                    }
+                                } else {
+                                    faceDetected = false
+                                }
+                                isProcessingFace = false
+                                image.close()
                             }
                             .addOnFailureListener { isProcessingFace = false; image.close() }
                     } else { image.close() }
@@ -685,8 +765,16 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
     }
 
     private fun closeCamera() {
-        try { captureSession?.close(); cameraDevice?.close(); imageReader?.close() } catch (e: Exception) { }
-        captureSession = null; cameraDevice = null; imageReader = null
+        try {
+            captureSession?.close()
+            cameraDevice?.close()
+            imageReader?.close()
+        } catch (e: Exception) {
+            // Ignore close errors
+        }
+        captureSession = null
+        cameraDevice = null
+        imageReader = null
     }
 
     private fun createProgram(vertexSource: String, fragmentSource: String): Int {
