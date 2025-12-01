@@ -560,63 +560,24 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glEnableVertexAttribArray(mFeedbackPositionHandle)
         GLES30.glVertexAttribPointer(mFeedbackPositionHandle, 3, GLES30.GL_FLOAT, false, 12, faceBoxVertexBuffer)
         
-        // Calculate the same camera frame transformations as applied in onDrawFrame()
-        val camRatio = 9.0f / 16.0f
-        val viewRatio = (w/2f) / h.toFloat()
-        val sX = if (viewRatio > camRatio) cameraAspectToView(camRatio, viewRatio) else 1.0f
-        val sY = if (viewRatio > camRatio) 1.0f else viewRatio / camRatio
+        // faceRectGL coordinates are in normalized 0-1 space from ImageReader
+        // Apply the same base transformation, then eye-specific offsets
+        val glX = (faceRectGL[0] * 2) - 1
+        val glY = (faceRectGL[1] * 2) - 1
+        val fW = faceRectGL[2] - faceRectGL[0]
+        val fH = faceRectGL[3] - faceRectGL[1]
         
-        // Transform faceRectGL coordinates through the same rotation/scaling pipeline as camera feed
-        // faceRectGL: [left, bottom, right, top] in normalized 0-1 space from ImageReader
-        // The camera feed applies: translate to center, rotate 270°, scale by sX/sY, translate back
-        // For 270° rotation: (x, y) -> (1-y, x) after translating to center
-        val faceLeft = faceRectGL[0]
-        val faceBottom = faceRectGL[1]
-        val faceRight = faceRectGL[2]
-        val faceTop = faceRectGL[3]
-        
-        // Transform each corner: translate to center, rotate 270°, scale, translate back
-        fun transformPoint(x: Float, y: Float): Pair<Float, Float> {
-            // Translate to center
-            var tx = x - 0.5f
-            var ty = y - 0.5f
-            // Rotate 270°: (x, y) -> (y, -x)
-            val rx = ty
-            val ry = -tx
-            // Scale
-            val sx = rx * sX
-            val sy = ry * sY
-            // Translate back
-            return Pair(sx + 0.5f, sy + 0.5f)
-        }
-        
-        val (blX, blY) = transformPoint(faceLeft, faceBottom)
-        val (brX, brY) = transformPoint(faceRight, faceBottom)
-        val (tlX, tlY) = transformPoint(faceLeft, faceTop)
-        val (trX, trY) = transformPoint(faceRight, faceTop)
-        
-        // Find bounding box of transformed corners
-        val minX = minOf(blX, brX, tlX, trX)
-        val maxX = maxOf(blX, brX, tlX, trX)
-        val minY = minOf(blY, brY, tlY, trY)
-        val maxY = maxOf(blY, brY, tlY, trY)
-        
-        // Convert to GL coordinates (-1 to 1) and calculate center/size
-        val centerX = (minX + maxX) / 2f
-        val centerY = (minY + maxY) / 2f
-        val fW = maxX - minX
-        val fH = maxY - minY
-        
-        // Create base MVP matrix for face box (in GL coordinate space)
+        // Start with identity matrix, then apply the same view matrix scaling as camera feed
         Matrix.setIdentityM(mFaceMVP, 0)
-        Matrix.translateM(mFaceMVP, 0, centerX * 2f - 1f, centerY * 2f - 1f, 0f)
-        Matrix.scaleM(mFaceMVP, 0, fW * 2f, fH * 2f, 1f)
+        Matrix.scaleM(mFaceMVP, 0, WARP_OVERFILL_SCALE, WARP_OVERFILL_SCALE, 1.0f)
+        Matrix.translateM(mFaceMVP, 0, glX, glY, 0f)
+        Matrix.scaleM(mFaceMVP, 0, fW * 2, fH * 2, 1f)
         
-        // Left eye: apply leftEyeX/Y offsets independently
+        // Left eye: apply leftEyeX/Y offsets independently (same as camera feed)
         System.arraycopy(mFaceMVP, 0, mFaceMVPLeft, 0, 16)
         Matrix.translateM(mFaceMVPLeft, 0, cal.leftEyeX, cal.leftEyeY, 0f)
         
-        // Right eye: apply rightEyeX/Y offsets independently
+        // Right eye: apply rightEyeX/Y offsets independently (same as camera feed)
         System.arraycopy(mFaceMVP, 0, mFaceMVPRight, 0, 16)
         Matrix.translateM(mFaceMVPRight, 0, cal.rightEyeX, cal.rightEyeY, 0f)
         
