@@ -909,25 +909,14 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glEnableVertexAttribArray(mFaceBoxOverlayPositionHandle)
         GLES30.glVertexAttribPointer(mFaceBoxOverlayPositionHandle, 3, GLES30.GL_FLOAT, false, 12, vertexBuffer)
 
-        // --- Configuration ---
-        val thumbSize = 256 // Size in pixels
-        val yOffset = 100   // Move it up/down relative to center
+        // --- Single Thumbnail (Lower Left) ---
+        val thumbSize = 256
         
-        // --- Left Eye Render ---
-        // Calculate center of Left Viewport (0 to w/2)
-        val leftCenterX = (w / 4) 
-        val leftCenterY = (h / 2) + yOffset
+        // Offset 10% from left edge AND 10% from bottom edge
+        val offsetX = (w * 0.1f).toInt()
+        val offsetY = (h * 0.1f).toInt()
         
-        GLES30.glViewport(leftCenterX - (thumbSize / 2), leftCenterY - (thumbSize / 2), thumbSize, thumbSize)
-        GLES30.glUniformMatrix4fv(mFaceBoxOverlayMVPHandle, 1, false, mIdentity, 0)
-        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
-
-        // --- Right Eye Render ---
-        // Calculate center of Right Viewport (w/2 to w)
-        val rightCenterX = (w / 2) + (w / 4)
-        val rightCenterY = (h / 2) + yOffset
-
-        GLES30.glViewport(rightCenterX - (thumbSize / 2), rightCenterY - (thumbSize / 2), thumbSize, thumbSize)
+        GLES30.glViewport(offsetX, offsetY, thumbSize, thumbSize)
         GLES30.glUniformMatrix4fv(mFaceBoxOverlayMVPHandle, 1, false, mIdentity, 0)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
 
