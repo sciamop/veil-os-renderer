@@ -17,7 +17,6 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.camera2.*
-// import android.media.ImageReader
 import android.opengl.GLES11Ext
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
@@ -130,7 +129,16 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
     private var mFaceThumbnailTextureId = 0
     private var thumbnailInitialized = false
     @Volatile private var pendingFaceBitmap: Bitmap? = null
-    
+
+    // --- LivePortrait / Polaroid State ---
+    private var mPolaroidTextureId = 0
+    private var polaroidTimer = 0
+    private val POLAROID_DISPLAY_FRAMES = 180 // Show for 3 seconds (60fps * 3)
+    @Volatile private var pendingPolaroidBitmap: Bitmap? = null
+    // Logic to prevent spamming captures
+    private var lastCaptureTime = 0L
+    private val CAPTURE_COOLDOWN_MS = 1000L // Reduced from 3000ms to 1000ms for faster testing
+
     // Reuse buffers for face detection to avoid GC and "inefficient" warning
     private var captureBuffer: ByteBuffer? = null
     private var captureBitmap: Bitmap? = null
@@ -205,6 +213,9 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize ServerManager
+        com.veil.renderer.api.ServerManager.init()
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -227,7 +238,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         glSurfaceView.setEGLContextClientVersion(3)
         glSurfaceView.setRenderer(this)
         glSurfaceView.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
-        
+
         setContentView(glSurfaceView)
 
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
@@ -388,8 +399,8 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES30.glClearColor(0f, 0f, 0f, 1f)
-        val textures = IntArray(2)
-        GLES30.glGenTextures(2, textures, 0)
+        val textures = IntArray(3) // Increased to 3
+        GLES30.glGenTextures(3, textures, 0)
 
         // 1. Camera Texture (OES)
         textureId = textures[0]
@@ -405,7 +416,16 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         // Allocate empty 512x512 texture for snapshots
         GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, 512, 512, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
 
-        // 3. Face Box Texture (2D) - matches camera frame size
+        // 3. Polaroid Capture Texture (2D) - NEW
+        mPolaroidTextureId = textures[2]
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mPolaroidTextureId)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        // Allocate 512x512 texture for LivePortrait source
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, 512, 512, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
+
+
+        // 4. Face Box Texture (2D) - matches camera frame size
         val faceBoxTextures = IntArray(1)
         GLES30.glGenTextures(1, faceBoxTextures, 0)
         mFaceBoxTextureId = faceBoxTextures[0]
@@ -417,7 +437,7 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         // Allocate 1920x1080 texture matching camera frame size
         GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, 1920, 1080, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
 
-        // 4. Face Thumbnail Texture (2D)
+        // 5. Face Thumbnail Texture (2D)
         val thumbTextures = IntArray(1)
         GLES30.glGenTextures(1, thumbTextures, 0)
         mFaceThumbnailTextureId = thumbTextures[0]
@@ -488,6 +508,9 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         if (surfaceTexture == null || textureId == 0) return
         try {
+            // Eat any pending GL errors to prevent SurfaceTexture from complaining in logs
+            while (GLES30.glGetError() != GLES30.GL_NO_ERROR) {}
+            
             surfaceTexture?.updateTexImage()
             surfaceTexture?.getTransformMatrix(mSTMatrix)
         } catch (e: Exception) { return }
@@ -495,6 +518,36 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         // Check if AI found a face and we need to update the GL texture
         if (pendingFaceBitmap != null) {
             uploadFaceTexture()
+        }
+        
+        // --- POLLING SERVER STATUS ---
+        // Poll every ~60 frames (approx 1 sec at 60fps) to keep UI in sync
+        if (System.currentTimeMillis() % 1000 < 20) {
+             com.veil.renderer.api.ServerManager.checkStatus { state ->
+                 // Ideally show this state on screen debug UI
+                 Log.d("VeilRenderer", "Server State: $state")
+             }
+        }
+
+        // --- UPLOAD POLAROID TEXTURE ---
+        if (pendingPolaroidBitmap != null) {
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mPolaroidTextureId)
+            GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, pendingPolaroidBitmap, 0)
+            GLES30.glGenerateMipmap(GLES30.GL_TEXTURE_2D)
+            
+            // --- SERVER UPLOAD HOOK ---
+            // If we have a new polaroid (Live Portrait candidate), try to upload it
+            // Only if server is IDLE
+            if (com.veil.renderer.api.ServerManager.currentState == "IDLE") {
+                 com.veil.renderer.api.ServerManager.uploadFace(
+                     pendingPolaroidBitmap!!,
+                     onSuccess = { Log.d("VeilRenderer", "Face uploaded successfully!") },
+                     onError = { error -> Log.e("VeilRenderer", "Upload failed: $error") }
+                 )
+            }
+            
+            pendingPolaroidBitmap = null
+            polaroidTimer = POLAROID_DISPLAY_FRAMES // Reset timer to show it
         }
 
         val w = glSurfaceView.width
@@ -566,9 +619,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
             Matrix.translateM(snapshotMVP, 0, glX, glY, 0f)
             Matrix.scaleM(snapshotMVP, 0, fW * 2, fH * 2, 1f)
 
-            // Calculate pixel coords for copy. Note: GL starts 0 at bottom.
-            // faceRectGL[1] is top-based from AI? No, we flipped it: 1.0 - (top/h).
-            // So faceRectGL[1] is bottom.
             val copyX = (faceRectGL[0] * (w/2)).toInt()
             val copyY = (faceRectGL[1] * h).toInt()
             val copyW = ((faceRectGL[2] - faceRectGL[0]) * (w/2)).toInt()
@@ -576,7 +626,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
             if (copyW > 0 && copyH > 0) {
                 GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mSnapshotTextureId)
-                // Use copy from framebuffer
                 GLES30.glCopyTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, copyX, copyY, copyW, copyH, 0)
             }
         }
@@ -609,6 +658,12 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
 
         if (thumbnailInitialized) {
             drawFaceThumbnail(w, h)
+        }
+
+        // --- RENDER POLAROID ---
+        if (polaroidTimer > 0) {
+            drawPolaroid(w, h)
+            polaroidTimer--
         }
 
         // --- Render Visual Feedback ---
@@ -645,60 +700,94 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glDisable(GLES30.GL_BLEND)
     }
 
+    // --- NEW: Polaroid Renderer ---
+    private fun drawPolaroid(w: Int, h: Int) {
+        // Draw to Full Screen (Overlay)
+        GLES30.glViewport(0, 0, w, h)
+
+        // 1. Draw Paper Background (White Rectangle)
+        GLES30.glEnable(GLES30.GL_BLEND)
+        GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
+        GLES30.glUseProgram(mFeedbackProgram) // Reusing simple solid color shader
+
+        Matrix.setIdentityM(mFaceMVP, 0)
+        // Position on right side of screen
+        val paperWidth = 0.35f
+        val paperHeight = paperWidth * 1.2f
+
+        Matrix.translateM(mFaceMVP, 0, 0.6f, 0.0f, 0f)
+        Matrix.scaleM(mFaceMVP, 0, paperWidth, paperHeight * (w.toFloat()/h.toFloat()), 1f)
+
+        GLES30.glUniformMatrix4fv(mFeedbackMVPHandle, 1, false, mFaceMVP, 0)
+        GLES30.glUniform4f(mFeedbackColorHandle, 0.95f, 0.95f, 0.9f, 1.0f) // Off-white
+
+        GLES30.glEnableVertexAttribArray(mFeedbackPositionHandle)
+        GLES30.glVertexAttribPointer(mFeedbackPositionHandle, 3, GLES30.GL_FLOAT, false, 12, vertexBuffer)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+
+        // 2. Draw Photo (The Texture)
+        GLES30.glUseProgram(mFaceBoxOverlayProgram)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mPolaroidTextureId)
+        GLES30.glUniform1i(mFaceBoxOverlaySamplerHandle, 0)
+
+        // Flip Y for texture (standard Bitmap to GL convention)
+        Matrix.setIdentityM(mTempMatrix, 0)
+        Matrix.translateM(mTempMatrix, 0, 0f, 1f, 0f)
+        Matrix.scaleM(mTempMatrix, 0, 1f, -1f, 1f)
+        GLES30.glUniformMatrix4fv(mFaceBoxOverlaySTMatrixHandle, 1, false, mTempMatrix, 0)
+
+        Matrix.setIdentityM(mFaceMVP, 0)
+        // Shift Photo Up slightly relative to paper
+        Matrix.translateM(mFaceMVP, 0, 0.6f, 0.05f, 0f)
+        val photoSize = paperWidth * 0.85f
+        Matrix.scaleM(mFaceMVP, 0, photoSize, photoSize * (w.toFloat()/h.toFloat()), 1f)
+
+        GLES30.glUniformMatrix4fv(mFaceBoxOverlayMVPHandle, 1, false, mFaceMVP, 0)
+
+        GLES30.glEnableVertexAttribArray(mFaceBoxOverlayPositionHandle)
+        GLES30.glVertexAttribPointer(mFaceBoxOverlayPositionHandle, 3, GLES30.GL_FLOAT, false, 12, vertexBuffer)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
+
+        GLES30.glDisableVertexAttribArray(mFeedbackPositionHandle)
+        GLES30.glDisableVertexAttribArray(mFaceBoxOverlayPositionHandle)
+        GLES30.glDisable(GLES30.GL_BLEND)
+    }
+
     private fun captureFrameForFaceDetection(w: Int, h: Int) {
-        // Capture at lower resolution for performance (e.g., 640x360)
-        // Maintain 16:9 aspect ratio to match display if possible
         val captureWidth = 640
         val captureHeight = 360
-        
-        // Read pixels from framebuffer (left eye viewport)
-        // Left eye viewport is (0, 0, w/2, h)
-        
-        // Initialize/reuse buffer
+
         if (captureBuffer == null || captureBuffer?.capacity() != captureWidth * captureHeight * 4) {
             captureBuffer = ByteBuffer.allocateDirect(captureWidth * captureHeight * 4)
             captureBuffer?.order(ByteOrder.nativeOrder())
         }
         val buffer = captureBuffer!!
         buffer.clear()
-        
-        // Read from center of left eye viewport, scaled down
+
         val readX = ((w/2 - captureWidth) / 2).coerceAtLeast(0)
         val readY = ((h - captureHeight) / 2).coerceAtLeast(0)
-        
-        GLES30.glReadPixels(
-            readX,
-            readY,
-            captureWidth,
-            captureHeight,
-            GLES30.GL_RGBA,
-            GLES30.GL_UNSIGNED_BYTE,
-            buffer
-        )
-        
-        // Convert to Bitmap
+
+        GLES30.glReadPixels(readX, readY, captureWidth, captureHeight, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buffer)
+
         buffer.rewind()
-        
+
         if (captureBitmap == null || captureBitmap?.width != captureWidth || captureBitmap?.height != captureHeight) {
             captureBitmap = Bitmap.createBitmap(captureWidth, captureHeight, Bitmap.Config.ARGB_8888)
         }
         val bitmap = captureBitmap!!
         bitmap.copyPixelsFromBuffer(buffer)
-        
-        // Flip vertically (OpenGL has origin at bottom-left, Bitmap at top-left)
+
         if (flipMatrix == null) {
             val matrix = android.graphics.Matrix()
             matrix.postScale(1f, -1f)
             flipMatrix = matrix
         }
-        
-        // Create flipped bitmap for face detection
+
         val currentFlipped = Bitmap.createBitmap(bitmap, 0, 0, captureWidth, captureHeight, flipMatrix!!, true)
-        
-        // Convert to InputImage and run face detection
         val inputImage = InputImage.fromBitmap(currentFlipped, 0)
         isProcessingFace = true
-        
+
         faceDetector.process(inputImage)
             .addOnSuccessListener { faces ->
                 if (faces.isNotEmpty()) {
@@ -706,66 +795,74 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
                     val b = face.boundingBox
                     val imgW = captureWidth.toFloat()
                     val imgH = captureHeight.toFloat()
-                    
-                    // Get nose landmark for centering (or fall back to bounding box center)
+
                     val noseLandmark = face.getLandmark(FaceLandmark.NOSE_BASE)
                     val centerX: Float
                     val centerY: Float
-                    
+
                     if (noseLandmark != null) {
-                        // Use nose position as center
                         centerX = noseLandmark.position.x / imgW
-                        centerY = 1.0f - (noseLandmark.position.y / imgH) // Flip Y
+                        centerY = 1.0f - (noseLandmark.position.y / imgH)
                     } else {
-                        // Fall back to bounding box center
                         centerX = (b.left + b.right) / (2f * imgW)
-                        centerY = 1.0f - ((b.top + b.bottom) / (2f * imgH)) // Flip Y
+                        centerY = 1.0f - ((b.top + b.bottom) / (2f * imgH))
                     }
-                    
-                    // Calculate face size from bounding box
+
                     val faceWidth = b.width() / imgW
                     val faceHeight = b.height() / imgH
-                    
-                    // Create centered box around nose (or face center)
                     val halfW = faceWidth / 2f
                     val halfH = faceHeight / 2f
-                    
-                    // These coordinates are relative to the CAPTURED CROP (640x360 center)
-                    // We need to map them back to the full viewport (0-1)
-                    
-                    // Fraction of viewport covered by capture
+
                     val viewportW = (w/2).toFloat()
                     val viewportH = h.toFloat()
                     val cropFracW = captureWidth / viewportW
                     val cropFracH = captureHeight / viewportH
-                    
-                    // Offset of capture in viewport (normalized)
                     val offsetX = ((viewportW - captureWidth) / 2f) / viewportW
                     val offsetY = ((viewportH - captureHeight) / 2f) / viewportH
-                    
-                    // Map local crop coordinates to full viewport coordinates
+
                     val viewCenterX = offsetX + (centerX * cropFracW)
                     val viewCenterY = offsetY + (centerY * cropFracH)
                     val viewHalfW = halfW * cropFracW
                     val viewHalfH = halfH * cropFracH
-                    
+
                     faceRectGL[0] = max(0f, viewCenterX - viewHalfW)
                     faceRectGL[1] = max(0f, viewCenterY - viewHalfH)
                     faceRectGL[2] = min(1f, viewCenterX + viewHalfW)
                     faceRectGL[3] = min(1f, viewCenterY + viewHalfH)
-                    
+
                     if (!faceDetected) {
                         faceDetected = true
-                        requestSnapshot = true
+                        // Only show bounding box snapshot if we aren't currently showing a Polaroid
+                        if (polaroidTimer <= 0) requestSnapshot = true
                     }
-                    
-                    // Capture face thumbnail
+
+                    // --- LIVEPORTRAIT CAPTURE LOGIC ---
+                    val now = System.currentTimeMillis()
+                    // Check cooldown AND ensure we aren't already displaying a polaroid
+                    // Force upload if it's been a while, regardless of timer state for testing
+                    if (now - lastCaptureTime > CAPTURE_COOLDOWN_MS) {
+                        if (isGoodSourceImage(face)) {
+                            // Valid Face Found!
+                            // Crop using LivePortrait logic (2.3x padding)
+                            val lpBitmap = cropForLivePortrait(currentFlipped, face)
+                            if (lpBitmap != null) {
+                                pendingPolaroidBitmap = lpBitmap
+                                lastCaptureTime = now
+                                Log.d("VeilRenderer", "Captured Good Face for LivePortrait!")
+                                polaroidTimer = 0 // Reset timer so it triggers update in onDrawFrame
+                            } else {
+                                Log.d("VeilRenderer", "Face crop failed (out of bounds?)")
+                            }
+                        }
+                    }
+
+                    // Standard Thumbnail Capture (Existing logic)
                     try {
                         val left = b.left.coerceIn(0, currentFlipped.width - 1)
                         val top = b.top.coerceIn(0, currentFlipped.height - 1)
                         val width = b.width().coerceAtMost(currentFlipped.width - left)
                         val height = b.height().coerceAtMost(currentFlipped.height - top)
-                        
+
                         if (width > 0 && height > 0) {
                             val faceCrop = Bitmap.createBitmap(currentFlipped, left, top, width, height)
                             val scaledCrop = Bitmap.createScaledBitmap(faceCrop, 256, 256, true)
@@ -787,106 +884,133 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
             }
     }
 
+    // --- Face Quality & LivePortrait Helpers ---
+
+    private fun isGoodSourceImage(face: Face): Boolean {
+        // 1. POSE (Straight On) - Relaxed significantly to 60 degrees
+        val rotationThreshold = 60.0f
+        val isStraight = (abs(face.headEulerAngleX) < rotationThreshold) &&
+                (abs(face.headEulerAngleY) < rotationThreshold) &&
+                (abs(face.headEulerAngleZ) < rotationThreshold)
+
+        if (!isStraight) {
+             Log.d("VeilRenderer", "Face rejected: Pose too extreme (X:${face.headEulerAngleX}, Y:${face.headEulerAngleY}, Z:${face.headEulerAngleZ})")
+             return false
+        }
+        
+        return true
+    }
+
+    private fun cropForLivePortrait(originalBitmap: Bitmap, face: Face): Bitmap? {
+        val box = face.boundingBox
+        val centerX = box.centerX()
+        val centerY = box.centerY()
+
+        // LivePortrait needs shoulders/hair.
+        // ML Kit box is just face skin.
+        // Original scale was 2.3x (way too big).
+        // Reduced to 1.1x for very tight crop.
+        val faceWidth = box.width()
+        val desiredSideLength = (faceWidth * 1.2).toInt()
+
+        // Calculate crop bounds (Centered)
+        var left = centerX - (desiredSideLength / 2)
+        var top = centerY - (desiredSideLength / 2)
+        
+        // Relaxed Boundary Checks - Clamp instead of reject?
+        // Let's try clamping to get *something* even if it cuts off a bit
+        // or just return null if it's WAY off.
+        
+        // STRICT CHECK DEBUGGING:
+        if (left < 0 || top < 0 ||
+            left + desiredSideLength > originalBitmap.width ||
+            top + desiredSideLength > originalBitmap.height) {
+            
+            Log.d("VeilRenderer", "Crop rejected: Bounds [L:$left, T:$top, S:$desiredSideLength] vs Image [W:${originalBitmap.width}, H:${originalBitmap.height}]")
+            return null
+        }
+
+        return try {
+            val cropped = Bitmap.createBitmap(originalBitmap, left, top, desiredSideLength, desiredSideLength)
+            // Resize to 512x512
+            Bitmap.createScaledBitmap(cropped, 512, 512, true)
+        } catch (e: Exception) {
+            Log.e("VeilRenderer", "Crop failed exception", e)
+            null
+        }
+    }
+
     private fun renderFaceBoxToTexture() {
         // Bind FBO and render face box to texture
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, mFaceBoxFBO)
         GLES30.glViewport(0, 0, 1920, 1080)
         GLES30.glClearColor(0f, 0f, 0f, 0f)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
-        
-        // Enable blending for transparency
+
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
-        
-        // Use face box program to draw rectangle
+
         GLES30.glUseProgram(mFaceBoxProgram)
         GLES30.glEnableVertexAttribArray(mFaceBoxPositionHandle)
         GLES30.glVertexAttribPointer(mFaceBoxPositionHandle, 3, GLES30.GL_FLOAT, false, 12, faceBoxVertexBuffer)
-        
-        // faceRectGL: [left, bottom, right, top] in normalized 0-1 space from ImageReader (480x640)
-        // Map to texture coordinates (1920x1080)
-        // Note: ImageReader is 640x480 but treated as 480x640 in face detection
+
         val faceLeft = faceRectGL[0]
         val faceBottom = faceRectGL[1]
         val faceRight = faceRectGL[2]
         val faceTop = faceRectGL[3]
-        
-        // Convert to texture space coordinates (0-1 for 1920x1080 texture)
-        // The ImageReader aspect ratio vs camera texture aspect ratio needs consideration
-        // For now, map directly assuming same coordinate space
+
         val texX = faceLeft
         val texY = faceBottom
         val texW = faceRight - faceLeft
         val texH = faceTop - faceBottom
-        
-        // Create MVP matrix to position face box in texture
+
         Matrix.setIdentityM(mFaceMVP, 0)
         val glX = (texX * 2) - 1
         val glY = (texY * 2) - 1
         Matrix.translateM(mFaceMVP, 0, glX, glY, 0f)
         Matrix.scaleM(mFaceMVP, 0, texW * 2, texH * 2, 1f)
-        
+
         GLES30.glUniformMatrix4fv(mFaceBoxMVPHandle, 1, false, mFaceMVP, 0)
         GLES30.glUniform4f(mFaceBoxColorHandle, 1.0f, 0.0f, 0.0f, 0.5f)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
-        
+
         GLES30.glDisableVertexAttribArray(mFaceBoxPositionHandle)
         GLES30.glDisable(GLES30.GL_BLEND)
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
     }
 
     private fun drawFaceBox(w: Int, h: Int) {
-        // First, render face box to texture
         renderFaceBoxToTexture()
-        
-        // Now render the texture using the same transformations as camera feed
+
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
-        
-        // Use face box overlay shader (GL_TEXTURE_2D compatible)
+
         GLES30.glUseProgram(mFaceBoxOverlayProgram)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mFaceBoxTextureId)
         GLES30.glUniform1i(mFaceBoxOverlaySamplerHandle, 0)
-        
-        // Use Identity matrix for texture coordinates (don't rotate/flip again)
+
         GLES30.glUniformMatrix4fv(mFaceBoxOverlaySTMatrixHandle, 1, false, mIdentity, 0)
         GLES30.glEnableVertexAttribArray(mFaceBoxOverlayPositionHandle)
         GLES30.glVertexAttribPointer(mFaceBoxOverlayPositionHandle, 3, GLES30.GL_FLOAT, false, 12, vertexBuffer)
-        
-        // Left eye: Use Identity MVP matrix (don't re-apply view/distortion transforms)
-        // The face coordinates are already relative to the rendered view
+
         GLES30.glViewport(0, 0, w/2, h)
         GLES30.glUniformMatrix4fv(mFaceBoxOverlayMVPHandle, 1, false, mIdentity, 0)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
-        
-        // Right eye: disabled for face box
-        // System.arraycopy(mViewMatrix, 0, mMVPMatrixRight, 0, 16)
-        // Matrix.scaleM(mMVPMatrixRight, 0, WARP_OVERFILL_SCALE, WARP_OVERFILL_SCALE, 1.0f)
-        // Matrix.translateM(mMVPMatrixRight, 0, cal.rightEyeX, cal.rightEyeY, 0f)
-        // GLES30.glViewport(w/2, 0, w/2, h)
-        // GLES30.glUniformMatrix4fv(mFaceBoxOverlayMVPHandle, 1, false, mMVPMatrixRight, 0)
-        // GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
-        
+
         GLES30.glDisableVertexAttribArray(mFaceBoxOverlayPositionHandle)
         GLES30.glDisable(GLES30.GL_BLEND)
     }
 
     private fun uploadFaceTexture() {
         val bitmap = pendingFaceBitmap ?: return
-        
-        // Bind the thumbnail texture
+
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mFaceThumbnailTextureId)
-        
-        // Upload the bitmap to the GPU
+
         GLUtils.texImage2D(GLES30.GL_TEXTURE_2D, 0, bitmap, 0)
         GLES30.glGenerateMipmap(GLES30.GL_TEXTURE_2D)
-        
-        // Clean up
+
         pendingFaceBitmap = null
-        // Do not recycle if you are using it elsewhere, but generally good practice in GL:
-        // bitmap.recycle() 
-        
         thumbnailInitialized = true
     }
 
@@ -900,7 +1024,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mFaceThumbnailTextureId)
         GLES30.glUniform1i(mFaceBoxOverlaySamplerHandle, 0)
 
-        // Flip Y for Bitmap texture
         Matrix.setIdentityM(mTempMatrix, 0)
         Matrix.translateM(mTempMatrix, 0, 0f, 1f, 0f)
         Matrix.scaleM(mTempMatrix, 0, 1f, -1f, 1f)
@@ -909,13 +1032,11 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         GLES30.glEnableVertexAttribArray(mFaceBoxOverlayPositionHandle)
         GLES30.glVertexAttribPointer(mFaceBoxOverlayPositionHandle, 3, GLES30.GL_FLOAT, false, 12, vertexBuffer)
 
-        // --- Single Thumbnail (Lower Left) ---
         val thumbSize = 256
-        
-        // Offset 10% from left edge AND 10% from bottom edge
+
         val offsetX = (w * 0.1f).toInt()
         val offsetY = (h * 0.1f).toInt()
-        
+
         GLES30.glViewport(offsetX, offsetY, thumbSize, thumbSize)
         GLES30.glUniformMatrix4fv(mFaceBoxOverlayMVPHandle, 1, false, mIdentity, 0)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
@@ -979,48 +1100,48 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         try {
             val cameraId = cameraManager.cameraIdList[0]
             Log.d("VeilRenderer", "Opening camera ID: $cameraId")
-            
+
             // Log all available cameras
             val cameraIds = cameraManager.cameraIdList
             Log.d("VeilRenderer", "Available cameras: ${cameraIds.joinToString()}")
-            
+
             // Log camera characteristics
             val characteristics = cameraManager.getCameraCharacteristics(cameraId)
             val sensorArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
             val sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE)
             val lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING)
             val availableStreamConfigs = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            
+
             Log.d("VeilRenderer", "Camera $cameraId characteristics:")
             Log.d("VeilRenderer", "  Lens facing: $lensFacing")
             Log.d("VeilRenderer", "  Sensor array size: $sensorArraySize")
             Log.d("VeilRenderer", "  Sensor pixel array size: $sensorSize")
-            
+
             if (sensorArraySize != null) {
                 Log.d("VeilRenderer", "  Active array: ${sensorArraySize.width()}x${sensorArraySize.height()}")
             }
             if (sensorSize != null) {
                 Log.d("VeilRenderer", "  Pixel array: ${sensorSize.width}x${sensorSize.height}")
             }
-            
+
             // Log available stream configurations
             availableStreamConfigs?.let { configs ->
                 val outputSizes = configs.getOutputSizes(SurfaceTexture::class.java)
                 Log.d("VeilRenderer", "  Available SurfaceTexture sizes: ${outputSizes.joinToString { "${it.width}x${it.height}" }}")
             }
-            
+
             cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
-                override fun onOpened(camera: CameraDevice) { 
+                override fun onOpened(camera: CameraDevice) {
                     Log.d("VeilRenderer", "Camera opened successfully")
                     cameraDevice = camera
                     startPreview()
                 }
-                override fun onDisconnected(camera: CameraDevice) { 
+                override fun onDisconnected(camera: CameraDevice) {
                     Log.d("VeilRenderer", "Camera disconnected")
                     cameraDevice?.close()
                     cameraDevice = null
                 }
-                override fun onError(camera: CameraDevice, error: Int) { 
+                override fun onError(camera: CameraDevice, error: Int) {
                     Log.e("VeilRenderer", "Camera error: $error")
                     cameraDevice?.close()
                     cameraDevice = null
@@ -1035,9 +1156,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         try {
             surfaceTexture?.setDefaultBufferSize(1920, 1080)
             val surface = Surface(surfaceTexture)
-            // ImageReader no longer used for face detection (now using framebuffer capture)
-            // imageReader = ImageReader.newInstance(640, 480, ImageFormat.YUV_420_888, 3)
-            // imageReader?.setOnImageAvailableListener(...)
 
             val targets = listOf(surface)
             cameraDevice?.createCaptureSession(targets, object : CameraCaptureSession.StateCallback() {
@@ -1047,46 +1165,18 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
                     try {
                         val builder = cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
                         builder?.addTarget(surface)
-                        // imageReader target removed
                         builder?.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, android.util.Range(60, 60))
                         builder?.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
-                        
-                        // Set crop region to zoom out (use full active array size)
-                        // Get active array size from camera characteristics
+
                         val cameraId = cameraManager.cameraIdList[0]
                         val characteristics = cameraManager.getCameraCharacteristics(cameraId)
                         val sensorArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
-                        val maxZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
-                        // Note: SCALER_DEFAULT_CROP_REGION may not be available on all devices
-                        val defaultCropRegion: Rect? = try {
-                            characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)?.let {
-                                Rect(0, 0, it.width(), it.height())
-                            }
-                        } catch (e: Exception) {
-                            null
-                        }
-                        
-                        Log.d("VeilRenderer", "Camera capture session configuration:")
-                        Log.d("VeilRenderer", "  Sensor array size: $sensorArraySize")
-                        Log.d("VeilRenderer", "  Max digital zoom: $maxZoom")
-                        Log.d("VeilRenderer", "  Default crop region: $defaultCropRegion")
-                        
+
                         if (sensorArraySize != null) {
-                            // Use the full active array size to maximize FOV (zoom out)
-                            // This gives the widest possible field of view
                             val cropRegion = Rect(0, 0, sensorArraySize.width(), sensorArraySize.height())
-                            Log.d("VeilRenderer", "  Setting crop region: $cropRegion")
-                            Log.d("VeilRenderer", "  Crop region size: ${cropRegion.width()}x${cropRegion.height()}")
                             builder?.set(CaptureRequest.SCALER_CROP_REGION, cropRegion)
-                        } else {
-                            Log.w("VeilRenderer", "  Sensor array size is null, cannot set crop region")
                         }
-                        
-                        // Log the actual request being built
-                        val request = builder?.build()
-                        val actualCropRegion = request?.get(CaptureRequest.SCALER_CROP_REGION)
-                        Log.d("VeilRenderer", "  Actual crop region in request: $actualCropRegion")
-                        
+
                         session.setRepeatingRequest(builder!!.build(), null, null)
                     } catch (e: Exception) {}
                 }
@@ -1099,8 +1189,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         try {
             captureSession?.close()
             cameraDevice?.close()
-            // imageReader?.close() - removed
-            // Clean up face box FBO and texture
             if (mFaceBoxFBO != 0) {
                 GLES30.glDeleteFramebuffers(1, intArrayOf(mFaceBoxFBO), 0)
                 mFaceBoxFBO = 0
@@ -1114,7 +1202,6 @@ class MainActivity : Activity(), GLSurfaceView.Renderer, SensorEventListener {
         }
         captureSession = null
         cameraDevice = null
-        // imageReader = null - removed
     }
 
     private fun createProgram(vertexSource: String, fragmentSource: String): Int {

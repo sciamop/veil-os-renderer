@@ -9,269 +9,271 @@
 9        android:targetSdkVersion="35" />
 10
 11    <uses-permission android:name="android.permission.USB_PERMISSION" />
-11-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:5:5-73
-11-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:5:22-70
+11-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:5:5-73
+11-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:5:22-70
 12    <uses-permission android:name="android.permission.CAMERA" />
-12-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:6:5-65
-12-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:6:22-62
+12-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:6:5-65
+12-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:6:22-62
 13    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-13-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:7:5-71
-13-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:7:22-68
+13-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:7:5-71
+13-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:7:22-68
 14
 15    <uses-feature android:name="android.hardware.sensor.gyroscope" />
-15-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:8:5-70
-15-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:8:19-67
+15-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:8:5-70
+15-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:8:19-67
 16    <uses-feature
-16-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:9:5-86
+16-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:9:5-86
 17        android:name="android.hardware.usb.host"
-17-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:9:19-59
+17-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:9:19-59
 18        android:required="true" />
-18-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:9:60-83
+18-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:9:60-83
 19    <uses-feature
-19-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:10:5-84
+19-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:10:5-84
 20        android:name="android.hardware.camera"
-20-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:10:19-57
+20-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:10:19-57
 21        android:required="true" />
-21-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:10:58-81
+21-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:10:58-81
 22    <uses-feature
-22-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:11:5-78
+22-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:11:5-78
 23        android:glEsVersion="0x00030000"
-23-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:11:19-51
+23-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:11:19-51
 24        android:required="true" />
-24-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:11:52-75
+24-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:11:52-75
 25
-26    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-26-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:33:5-82
-26-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:33:22-79
-27    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-27-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:34:5-80
-27-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:34:22-77
-28    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-28-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:35:5-81
-28-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:35:22-78
-29    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-29-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:36:5-77
-29-->[com.herohan:UVCAndroid:1.0.7] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/4ec32871ca71cdf5aa819be518bece39/transformed/jetified-UVCAndroid-1.0.7/AndroidManifest.xml:36:22-74
-30
-31    <permission
-31-->[androidx.core:core:1.13.1] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/cef816511ea471ee061a42cbdef31dfc/transformed/core-1.13.1/AndroidManifest.xml:22:5-24:47
-32        android:name="com.veil.renderer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-32-->[androidx.core:core:1.13.1] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/cef816511ea471ee061a42cbdef31dfc/transformed/core-1.13.1/AndroidManifest.xml:23:9-81
-33        android:protectionLevel="signature" />
-33-->[androidx.core:core:1.13.1] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/cef816511ea471ee061a42cbdef31dfc/transformed/core-1.13.1/AndroidManifest.xml:24:9-44
-34
-35    <uses-permission android:name="com.veil.renderer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
-35-->[androidx.core:core:1.13.1] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/cef816511ea471ee061a42cbdef31dfc/transformed/core-1.13.1/AndroidManifest.xml:26:5-97
-35-->[androidx.core:core:1.13.1] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/cef816511ea471ee061a42cbdef31dfc/transformed/core-1.13.1/AndroidManifest.xml:26:22-94
-36    <!-- <uses-sdk android:minSdkVersion="14"/> -->
-37    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-37-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:25:5-79
-37-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:25:22-76
-38    <uses-permission android:name="android.permission.INTERNET" />
-38-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:26:5-67
-38-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:26:22-64
+26    <uses-permission android:name="android.permission.INTERNET" />
+26-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:12:5-67
+26-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:12:22-64
+27    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+27-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:33:5-82
+27-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:33:22-79
+28    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+28-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:34:5-80
+28-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:34:22-77
+29    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+29-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:35:5-81
+29-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:35:22-78
+30    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+30-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:36:5-77
+30-->[com.herohan:UVCAndroid:1.0.7] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\4ec32871ca71cdf5aa819be518bece39\transformed\jetified-UVCAndroid-1.0.7\AndroidManifest.xml:36:22-74
+31
+32    <permission
+32-->[androidx.core:core:1.13.1] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\cef816511ea471ee061a42cbdef31dfc\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+33        android:name="com.veil.renderer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+33-->[androidx.core:core:1.13.1] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\cef816511ea471ee061a42cbdef31dfc\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+34        android:protectionLevel="signature" />
+34-->[androidx.core:core:1.13.1] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\cef816511ea471ee061a42cbdef31dfc\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+35
+36    <uses-permission android:name="com.veil.renderer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
+36-->[androidx.core:core:1.13.1] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\cef816511ea471ee061a42cbdef31dfc\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+36-->[androidx.core:core:1.13.1] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\cef816511ea471ee061a42cbdef31dfc\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+37    <!-- <uses-sdk android:minSdkVersion="14"/> -->
+38    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+38-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:25:5-79
+38-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:25:22-76
 39
 40    <application
-40-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:13:5-40:19
+40-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:14:5-42:19
 41        android:allowBackup="true"
-41-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:14:9-35
+41-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:15:9-35
 42        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-42-->[androidx.core:core:1.13.1] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/cef816511ea471ee061a42cbdef31dfc/transformed/core-1.13.1/AndroidManifest.xml:28:18-86
+42-->[androidx.core:core:1.13.1] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\cef816511ea471ee061a42cbdef31dfc\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 43        android:debuggable="true"
 44        android:extractNativeLibs="false"
 45        android:icon="@android:drawable/ic_menu_camera"
-45-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:15:9-56
+45-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:17:9-56
 46        android:label="@string/app_name"
-46-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:16:9-41
+46-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:18:9-41
 47        android:testOnly="true"
-48        android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
-48-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:17:9-67
-49        <activity
-49-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:19:9-39:20
-50            android:name="com.veil.renderer.MainActivity"
-50-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:20:13-41
-51            android:configChanges="orientation|screenSize|keyboardHidden"
-51-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:23:13-74
-52            android:exported="true"
-52-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:21:13-36
-53            android:screenOrientation="landscape"
-53-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:22:13-50
-54            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
-54-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:24:13-71
-55            <intent-filter>
-55-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:26:13-29:29
-56                <action android:name="android.intent.action.MAIN" />
-56-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:27:17-69
-56-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:27:25-66
-57
-58                <category android:name="android.intent.category.LAUNCHER" />
-58-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:28:17-77
-58-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:28:27-74
-59            </intent-filter>
-60            <intent-filter>
-60-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:31:13-33:29
-61                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
-61-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:32:17-90
-61-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:32:25-87
-62            </intent-filter>
-63
-64            <meta-data
-64-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:35:13-37:57
-65                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-65-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:36:17-79
-66                android:resource="@xml/device_filter" />
-66-->/Users/toddfaulls/Documents/_projects/veil-os/VeilRenderer/app/src/main/AndroidManifest.xml:37:17-54
-67        </activity>
-68
-69        <service
-69-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/73b61843657eaf6981e529164ce2116a/transformed/jetified-play-services-mlkit-face-detection-17.1.0/AndroidManifest.xml:9:9-15:19
-70            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
-70-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/73b61843657eaf6981e529164ce2116a/transformed/jetified-play-services-mlkit-face-detection-17.1.0/AndroidManifest.xml:10:13-91
-71            android:directBootAware="true"
-71-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:17:13-43
-72            android:exported="false" >
-72-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/73b61843657eaf6981e529164ce2116a/transformed/jetified-play-services-mlkit-face-detection-17.1.0/AndroidManifest.xml:11:13-37
-73            <meta-data
-73-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/73b61843657eaf6981e529164ce2116a/transformed/jetified-play-services-mlkit-face-detection-17.1.0/AndroidManifest.xml:12:13-14:85
-74                android:name="com.google.firebase.components:com.google.mlkit.vision.face.internal.FaceRegistrar"
-74-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/73b61843657eaf6981e529164ce2116a/transformed/jetified-play-services-mlkit-face-detection-17.1.0/AndroidManifest.xml:13:17-114
-75                android:value="com.google.firebase.components.ComponentRegistrar" />
-75-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/73b61843657eaf6981e529164ce2116a/transformed/jetified-play-services-mlkit-face-detection-17.1.0/AndroidManifest.xml:14:17-82
-76            <meta-data
-76-->[com.google.mlkit:vision-common:17.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/543a728940f9800933839fa7cfa9de87/transformed/jetified-vision-common-17.2.0/AndroidManifest.xml:12:13-14:85
-77                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
-77-->[com.google.mlkit:vision-common:17.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/543a728940f9800933839fa7cfa9de87/transformed/jetified-vision-common-17.2.0/AndroidManifest.xml:13:17-124
-78                android:value="com.google.firebase.components.ComponentRegistrar" />
-78-->[com.google.mlkit:vision-common:17.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/543a728940f9800933839fa7cfa9de87/transformed/jetified-vision-common-17.2.0/AndroidManifest.xml:14:17-82
-79            <meta-data
-79-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:20:13-22:85
-80                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
-80-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:21:17-120
-81                android:value="com.google.firebase.components.ComponentRegistrar" />
-81-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:22:17-82
-82        </service>
-83
-84        <provider
-84-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:9:9-13:38
-85            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
-85-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:10:13-78
-86            android:authorities="com.veil.renderer.mlkitinitprovider"
-86-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:11:13-69
-87            android:exported="false"
-87-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:12:13-37
-88            android:initOrder="99" />
-88-->[com.google.mlkit:common:18.5.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d237a8c22c6474f730707e0cdab1186a/transformed/jetified-common-18.5.0/AndroidManifest.xml:13:13-35
-89
-90        <activity
-90-->[com.google.android.gms:play-services-base:18.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d1317cf0da892e022415da0a957aafb7/transformed/jetified-play-services-base-18.1.0/AndroidManifest.xml:20:9-22:45
-91            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-91-->[com.google.android.gms:play-services-base:18.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d1317cf0da892e022415da0a957aafb7/transformed/jetified-play-services-base-18.1.0/AndroidManifest.xml:20:19-85
-92            android:exported="false"
-92-->[com.google.android.gms:play-services-base:18.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d1317cf0da892e022415da0a957aafb7/transformed/jetified-play-services-base-18.1.0/AndroidManifest.xml:22:19-43
-93            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-93-->[com.google.android.gms:play-services-base:18.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/d1317cf0da892e022415da0a957aafb7/transformed/jetified-play-services-base-18.1.0/AndroidManifest.xml:21:19-78
-94
-95        <meta-data
-95-->[com.google.android.gms:play-services-basement:18.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/71b5002d86517641d7767f8c9bf4e899/transformed/jetified-play-services-basement-18.1.0/AndroidManifest.xml:21:9-23:69
-96            android:name="com.google.android.gms.version"
-96-->[com.google.android.gms:play-services-basement:18.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/71b5002d86517641d7767f8c9bf4e899/transformed/jetified-play-services-basement-18.1.0/AndroidManifest.xml:22:13-58
-97            android:value="@integer/google_play_services_version" />
-97-->[com.google.android.gms:play-services-basement:18.1.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/71b5002d86517641d7767f8c9bf4e899/transformed/jetified-play-services-basement-18.1.0/AndroidManifest.xml:23:13-66
-98
-99        <provider
-99-->[androidx.emoji2:emoji2:1.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/5ac437853ce22cc4f70dc376ad89b568/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
-100            android:name="androidx.startup.InitializationProvider"
-100-->[androidx.emoji2:emoji2:1.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/5ac437853ce22cc4f70dc376ad89b568/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:25:13-67
-101            android:authorities="com.veil.renderer.androidx-startup"
-101-->[androidx.emoji2:emoji2:1.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/5ac437853ce22cc4f70dc376ad89b568/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:26:13-68
-102            android:exported="false" >
-102-->[androidx.emoji2:emoji2:1.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/5ac437853ce22cc4f70dc376ad89b568/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:27:13-37
-103            <meta-data
-103-->[androidx.emoji2:emoji2:1.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/5ac437853ce22cc4f70dc376ad89b568/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
-104                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-104-->[androidx.emoji2:emoji2:1.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/5ac437853ce22cc4f70dc376ad89b568/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:30:17-75
-105                android:value="androidx.startup" />
-105-->[androidx.emoji2:emoji2:1.2.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/5ac437853ce22cc4f70dc376ad89b568/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:31:17-49
-106            <meta-data
-106-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/c4e65c45bec527a4a45d03673ca2cb12/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:29:13-31:52
-107                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-107-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/c4e65c45bec527a4a45d03673ca2cb12/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:30:17-78
-108                android:value="androidx.startup" />
-108-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/c4e65c45bec527a4a45d03673ca2cb12/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:31:17-49
-109            <meta-data
-109-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
-110                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-110-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
-111                android:value="androidx.startup" />
-111-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
-112        </provider>
-113
-114        <service
-114-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:29:9-35:19
-115            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
-115-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:30:13-103
-116            android:exported="false" >
-116-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:31:13-37
-117            <meta-data
-117-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:32:13-34:39
-118                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
-118-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:33:17-94
-119                android:value="cct" />
-119-->[com.google.android.datatransport:transport-backend-cct:2.3.3] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/578c0e0344c8b00655b6d31199942889/transformed/jetified-transport-backend-cct-2.3.3/AndroidManifest.xml:34:17-36
-120        </service>
-121        <service
-121-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/000432544b6aa1adff73a6f9fe9f2d08/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:26:9-30:19
-122            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
-122-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/000432544b6aa1adff73a6f9fe9f2d08/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:27:13-117
-123            android:exported="false"
-123-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/000432544b6aa1adff73a6f9fe9f2d08/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:28:13-37
-124            android:permission="android.permission.BIND_JOB_SERVICE" >
-124-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/000432544b6aa1adff73a6f9fe9f2d08/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:29:13-69
-125        </service>
-126
-127        <receiver
-127-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/000432544b6aa1adff73a6f9fe9f2d08/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:32:9-34:40
-128            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
-128-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/000432544b6aa1adff73a6f9fe9f2d08/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:33:13-132
-129            android:exported="false" />
-129-->[com.google.android.datatransport:transport-runtime:2.2.6] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/000432544b6aa1adff73a6f9fe9f2d08/transformed/jetified-transport-runtime-2.2.6/AndroidManifest.xml:34:13-37
-130        <receiver
-130-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
-131            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-131-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
-132            android:directBootAware="false"
-132-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
-133            android:enabled="true"
-133-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
-134            android:exported="true"
-134-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
-135            android:permission="android.permission.DUMP" >
-135-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
-136            <intent-filter>
-136-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
-137                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-137-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
-137-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
-138            </intent-filter>
-139            <intent-filter>
-139-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
-140                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-140-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
-140-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
-141            </intent-filter>
-142            <intent-filter>
-142-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
-143                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-143-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
-143-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
-144            </intent-filter>
-145            <intent-filter>
-145-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
-146                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-146-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
-146-->[androidx.profileinstaller:profileinstaller:1.3.0] /Users/toddfaulls/.gradle/caches/9.0-milestone-1/transforms/95534bd726c5df624a9db169c954d74b/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
-147            </intent-filter>
-148        </receiver>
-149    </application>
-150
-151</manifest>
+48        android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+48-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:19:9-67
+49        android:usesCleartextTraffic="true" >
+49-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:16:9-44
+50        <activity
+50-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:21:9-41:20
+51            android:name="com.veil.renderer.MainActivity"
+51-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:22:13-41
+52            android:configChanges="orientation|screenSize|keyboardHidden"
+52-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:25:13-74
+53            android:exported="true"
+53-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:23:13-36
+54            android:screenOrientation="landscape"
+54-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:24:13-50
+55            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
+55-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:26:13-71
+56            <intent-filter>
+56-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:28:13-31:29
+57                <action android:name="android.intent.action.MAIN" />
+57-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:29:17-69
+57-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:29:25-66
+58
+59                <category android:name="android.intent.category.LAUNCHER" />
+59-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:30:17-77
+59-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:30:27-74
+60            </intent-filter>
+61            <intent-filter>
+61-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:33:13-35:29
+62                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+62-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:34:17-90
+62-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:34:25-87
+63            </intent-filter>
+64
+65            <meta-data
+65-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:37:13-39:57
+66                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+66-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:38:17-79
+67                android:resource="@xml/device_filter" />
+67-->C:\Users\sciam\Documents\_projects\[FALL2025] Thesis\concept\veil-visor\veil-os-renderer\VeilRenderer\app\src\main\AndroidManifest.xml:39:17-54
+68        </activity>
+69
+70        <service
+70-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\73b61843657eaf6981e529164ce2116a\transformed\jetified-play-services-mlkit-face-detection-17.1.0\AndroidManifest.xml:9:9-15:19
+71            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+71-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\73b61843657eaf6981e529164ce2116a\transformed\jetified-play-services-mlkit-face-detection-17.1.0\AndroidManifest.xml:10:13-91
+72            android:directBootAware="true"
+72-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:17:13-43
+73            android:exported="false" >
+73-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\73b61843657eaf6981e529164ce2116a\transformed\jetified-play-services-mlkit-face-detection-17.1.0\AndroidManifest.xml:11:13-37
+74            <meta-data
+74-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\73b61843657eaf6981e529164ce2116a\transformed\jetified-play-services-mlkit-face-detection-17.1.0\AndroidManifest.xml:12:13-14:85
+75                android:name="com.google.firebase.components:com.google.mlkit.vision.face.internal.FaceRegistrar"
+75-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\73b61843657eaf6981e529164ce2116a\transformed\jetified-play-services-mlkit-face-detection-17.1.0\AndroidManifest.xml:13:17-114
+76                android:value="com.google.firebase.components.ComponentRegistrar" />
+76-->[com.google.android.gms:play-services-mlkit-face-detection:17.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\73b61843657eaf6981e529164ce2116a\transformed\jetified-play-services-mlkit-face-detection-17.1.0\AndroidManifest.xml:14:17-82
+77            <meta-data
+77-->[com.google.mlkit:vision-common:17.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\543a728940f9800933839fa7cfa9de87\transformed\jetified-vision-common-17.2.0\AndroidManifest.xml:12:13-14:85
+78                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
+78-->[com.google.mlkit:vision-common:17.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\543a728940f9800933839fa7cfa9de87\transformed\jetified-vision-common-17.2.0\AndroidManifest.xml:13:17-124
+79                android:value="com.google.firebase.components.ComponentRegistrar" />
+79-->[com.google.mlkit:vision-common:17.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\543a728940f9800933839fa7cfa9de87\transformed\jetified-vision-common-17.2.0\AndroidManifest.xml:14:17-82
+80            <meta-data
+80-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:20:13-22:85
+81                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
+81-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:21:17-120
+82                android:value="com.google.firebase.components.ComponentRegistrar" />
+82-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:22:17-82
+83        </service>
+84
+85        <provider
+85-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:9:9-13:38
+86            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+86-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:10:13-78
+87            android:authorities="com.veil.renderer.mlkitinitprovider"
+87-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:11:13-69
+88            android:exported="false"
+88-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:12:13-37
+89            android:initOrder="99" />
+89-->[com.google.mlkit:common:18.5.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d237a8c22c6474f730707e0cdab1186a\transformed\jetified-common-18.5.0\AndroidManifest.xml:13:13-35
+90
+91        <activity
+91-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d1317cf0da892e022415da0a957aafb7\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:20:9-22:45
+92            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+92-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d1317cf0da892e022415da0a957aafb7\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:20:19-85
+93            android:exported="false"
+93-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d1317cf0da892e022415da0a957aafb7\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:22:19-43
+94            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+94-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\d1317cf0da892e022415da0a957aafb7\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:21:19-78
+95
+96        <meta-data
+96-->[com.google.android.gms:play-services-basement:18.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\71b5002d86517641d7767f8c9bf4e899\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:21:9-23:69
+97            android:name="com.google.android.gms.version"
+97-->[com.google.android.gms:play-services-basement:18.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\71b5002d86517641d7767f8c9bf4e899\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:22:13-58
+98            android:value="@integer/google_play_services_version" />
+98-->[com.google.android.gms:play-services-basement:18.1.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\71b5002d86517641d7767f8c9bf4e899\transformed\jetified-play-services-basement-18.1.0\AndroidManifest.xml:23:13-66
+99
+100        <provider
+100-->[androidx.emoji2:emoji2:1.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\5ac437853ce22cc4f70dc376ad89b568\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+101            android:name="androidx.startup.InitializationProvider"
+101-->[androidx.emoji2:emoji2:1.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\5ac437853ce22cc4f70dc376ad89b568\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
+102            android:authorities="com.veil.renderer.androidx-startup"
+102-->[androidx.emoji2:emoji2:1.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\5ac437853ce22cc4f70dc376ad89b568\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
+103            android:exported="false" >
+103-->[androidx.emoji2:emoji2:1.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\5ac437853ce22cc4f70dc376ad89b568\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
+104            <meta-data
+104-->[androidx.emoji2:emoji2:1.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\5ac437853ce22cc4f70dc376ad89b568\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+105                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+105-->[androidx.emoji2:emoji2:1.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\5ac437853ce22cc4f70dc376ad89b568\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
+106                android:value="androidx.startup" />
+106-->[androidx.emoji2:emoji2:1.2.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\5ac437853ce22cc4f70dc376ad89b568\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
+107            <meta-data
+107-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\c4e65c45bec527a4a45d03673ca2cb12\transformed\jetified-lifecycle-process-2.6.2\AndroidManifest.xml:29:13-31:52
+108                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+108-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\c4e65c45bec527a4a45d03673ca2cb12\transformed\jetified-lifecycle-process-2.6.2\AndroidManifest.xml:30:17-78
+109                android:value="androidx.startup" />
+109-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\c4e65c45bec527a4a45d03673ca2cb12\transformed\jetified-lifecycle-process-2.6.2\AndroidManifest.xml:31:17-49
+110            <meta-data
+110-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+111                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+111-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+112                android:value="androidx.startup" />
+112-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+113        </provider>
+114
+115        <service
+115-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:29:9-35:19
+116            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+116-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:30:13-103
+117            android:exported="false" >
+117-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:31:13-37
+118            <meta-data
+118-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:32:13-34:39
+119                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+119-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:33:17-94
+120                android:value="cct" />
+120-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\578c0e0344c8b00655b6d31199942889\transformed\jetified-transport-backend-cct-2.3.3\AndroidManifest.xml:34:17-36
+121        </service>
+122        <service
+122-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\000432544b6aa1adff73a6f9fe9f2d08\transformed\jetified-transport-runtime-2.2.6\AndroidManifest.xml:26:9-30:19
+123            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+123-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\000432544b6aa1adff73a6f9fe9f2d08\transformed\jetified-transport-runtime-2.2.6\AndroidManifest.xml:27:13-117
+124            android:exported="false"
+124-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\000432544b6aa1adff73a6f9fe9f2d08\transformed\jetified-transport-runtime-2.2.6\AndroidManifest.xml:28:13-37
+125            android:permission="android.permission.BIND_JOB_SERVICE" >
+125-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\000432544b6aa1adff73a6f9fe9f2d08\transformed\jetified-transport-runtime-2.2.6\AndroidManifest.xml:29:13-69
+126        </service>
+127
+128        <receiver
+128-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\000432544b6aa1adff73a6f9fe9f2d08\transformed\jetified-transport-runtime-2.2.6\AndroidManifest.xml:32:9-34:40
+129            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+129-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\000432544b6aa1adff73a6f9fe9f2d08\transformed\jetified-transport-runtime-2.2.6\AndroidManifest.xml:33:13-132
+130            android:exported="false" />
+130-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\000432544b6aa1adff73a6f9fe9f2d08\transformed\jetified-transport-runtime-2.2.6\AndroidManifest.xml:34:13-37
+131        <receiver
+131-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+132            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+132-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+133            android:directBootAware="false"
+133-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+134            android:enabled="true"
+134-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+135            android:exported="true"
+135-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+136            android:permission="android.permission.DUMP" >
+136-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+137            <intent-filter>
+137-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+138                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+138-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+138-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+139            </intent-filter>
+140            <intent-filter>
+140-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+141                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+141-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+141-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+142            </intent-filter>
+143            <intent-filter>
+143-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+144                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+144-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+144-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+145            </intent-filter>
+146            <intent-filter>
+146-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+147                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+147-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+147-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\sciam\.gradle\caches\9.0-milestone-1\transforms\95534bd726c5df624a9db169c954d74b\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+148            </intent-filter>
+149        </receiver>
+150    </application>
+151
+152</manifest>

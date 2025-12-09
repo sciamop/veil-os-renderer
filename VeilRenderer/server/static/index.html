@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veil Live Portrait Client</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #000;
+            color: #0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #status {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            border: 1px solid #0f0;
+            padding: 10px;
+        }
+        #video-container {
+            width: 512px;
+            height: 512px;
+            border: 2px dashed #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+        .blink {
+            animation: blink-animation 1s steps(5, start) infinite;
+        }
+        @keyframes blink-animation {
+            to {
+                visibility: hidden;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="status">CONNECTING...</div>
+    <div id="video-container">
+        <video id="output-video" controls autoplay loop playsinline></video>
+        <span id="placeholder-text">WAITING FOR SIGNAL...</span>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const videoEl = document.getElementById('output-video');
+        const placeholderEl = document.getElementById('placeholder-text');
+        const videoContainer = document.getElementById('video-container');
+        
+        // Create an image element for the uploaded face
+        const uploadedImageEl = document.createElement('img');
+        uploadedImageEl.style.width = '100%';
+        uploadedImageEl.style.height = '100%';
+        uploadedImageEl.style.objectFit = 'cover';
+        uploadedImageEl.style.display = 'none';
+        videoContainer.appendChild(uploadedImageEl);
+
+        const evtSource = new EventSource("/events");
+
+        evtSource.onmessage = function(event) {
+            // Depending on how sse-starlette sends data, might need parsing
+            // Usually data is just the payload string if we sent a dict stringified or just a string
+            console.log("Event received:", event);
+        };
+        
+        evtSource.addEventListener("new_image", function(event) {
+            const imageUrl = event.data;
+            console.log("New image uploaded:", imageUrl);
+            // Show the uploaded image immediately
+            videoEl.style.display = 'none';
+            placeholderEl.style.display = 'none';
+            uploadedImageEl.src = imageUrl + "?t=" + new Date().getTime(); // Bust cache
+            uploadedImageEl.style.display = 'block';
+            statusEl.textContent = "IMAGE RECEIVED";
+        });
+
+        evtSource.addEventListener("state_change", function(event) {
+            const state = event.data;
+            console.log("State change:", state);
+            updateUI(state);
+        });
+
+        function updateUI(state) {
+            // Clean up old classes
+            statusEl.classList.remove('blink');
+
+            if (state === "IDLE") {
+                // Keep showing image if we have one, otherwise idle text
+                if (uploadedImageEl.src && uploadedImageEl.style.display !== 'none') {
+                     statusEl.textContent = "READY FOR NEXT";
+                } else {
+                    statusEl.textContent = "SYSTEM IDLE";
+                    videoEl.style.display = 'none';
+                    uploadedImageEl.style.display = 'none';
+                    placeholderEl.style.display = 'block';
+                    placeholderEl.textContent = "READY FOR INPUT";
+                }
+            } else if (state === "PROCESSING") {
+                statusEl.textContent = "PROCESSING DATA...";
+                statusEl.classList.add('blink');
+                
+                // Ensure image is visible during processing
+                if (uploadedImageEl.src) {
+                    videoEl.style.display = 'none';
+                    placeholderEl.style.display = 'none';
+                    uploadedImageEl.style.display = 'block';
+                } else {
+                    videoEl.style.display = 'none';
+                    uploadedImageEl.style.display = 'none';
+                    placeholderEl.style.display = 'block';
+                    placeholderEl.textContent = "RENDERING...";
+                }
+                
+            } else if (state === "READY") {
+                statusEl.textContent = "TRANSMISSION RECEIVED";
+                placeholderEl.style.display = 'none';
+                uploadedImageEl.style.display = 'none'; // Hide image, show video
+                videoEl.style.display = 'block';
+                
+                // Force reload video to ensure fresh cache
+                const timestamp = new Date().getTime();
+                videoEl.src = "/video?t=" + timestamp;
+                videoEl.play().catch(e => console.error("Auto-play prevented:", e));
+            }
+        }
+
+        // Initial check
+        fetch('/status')
+            .then(res => res.json())
+            .then(data => updateUI(data.state));
+
+    </script>
+</body>
+</html>
+

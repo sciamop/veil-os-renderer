@@ -13,6 +13,7 @@ gradle-app.setting
 
 # Local configuration
 local.properties
+.gradle/config.properties
 
 # IDE
 .idea/
